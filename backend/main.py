@@ -11,11 +11,11 @@ from app.api import health_router
 def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application.
-    
+
     Returns:
         FastAPI: Configured FastAPI application instance
     """
-    
+
     # Create FastAPI app
     app = FastAPI(
         title=settings.app_name,
@@ -23,9 +23,9 @@ def create_app() -> FastAPI:
         description="AI-Powered Legal Document Risk Scanner",
         docs_url="/docs",
         redoc_url="/redoc",
-        openapi_url="/openapi.json"
+        openapi_url="/openapi.json",
     )
-    
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -34,14 +34,10 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
-    
+
     # Include routers
-    app.include_router(
-        health_router,
-        prefix=settings.api_v1_prefix,
-        tags=["health"]
-    )
-    
+    app.include_router(health_router, prefix=settings.api_v1_prefix, tags=["health"])
+
     # Root endpoint
     @app.get("/")
     async def root():
@@ -51,10 +47,10 @@ def create_app() -> FastAPI:
                 "message": f"Welcome to {settings.app_name}",
                 "version": settings.app_version,
                 "docs": "/docs",
-                "health": f"{settings.api_v1_prefix}/health"
+                "health": f"{settings.api_v1_prefix}/health",
             }
         )
-    
+
     return app
 
 
