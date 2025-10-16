@@ -1,0 +1,58 @@
+{
+  "name": "contractcopilot-monorepo",
+  "version": "1.0.0",
+  "description": "AI-Powered Legal Document Risk Scanner - Monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && uv run --with fastapi --with 'uvicorn[standard]' --with pydantic-settings uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd frontend && npm test",
+    "test:backend": "cd backend && uv run pytest",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:backend": "cd backend && uv run flake8 .",
+    "format": "npm run format:frontend && npm run format:backend",
+    "format:frontend": "cd frontend && npm run format",
+    "format:backend": "cd backend && uv run black . && uv run isort .",
+    "clean": "rm -rf node_modules frontend/node_modules frontend/dist backend/.venv backend/__pycache__ backend/.pytest_cache",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && uv pip install -r requirements.txt",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "infra:init": "cd infra && terraform init",
+    "infra:plan": "cd infra && terraform plan",
+    "infra:apply": "cd infra && terraform apply",
+    "infra:destroy": "cd infra && terraform destroy"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "ai",
+    "legal",
+    "contract-analysis",
+    "llm",
+    "fastapi",
+    "react",
+    "typescript",
+    "terraform",
+    "aws"
+  ],
+  "author": "ContractCopilot Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/contractcopilot.git"
+  }
+}
