@@ -23,7 +23,8 @@ export const useDetailedHealthCheck = () => {
   return useQuery({
     queryKey: ['health', 'detailed'],
     queryFn: async () => {
-      const response = await healthApi.detailedHealthCheckApiV1HealthDetailedGet();
+      const response =
+        await healthApi.detailedHealthCheckApiV1HealthDetailedGet();
       return response.data;
     },
     refetchInterval: 60000, // Refetch every minute
