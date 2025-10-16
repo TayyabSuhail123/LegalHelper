@@ -70,16 +70,44 @@ FastAPI-based backend service for ContractCopilot - AI-Powered Legal Document Ri
 
 ### Docker Development
 
-1. **Build and run with Docker:**
-   ```bash
-   docker build -t contractcopilot-backend .
-   docker run -p 8000:8000 contractcopilot-backend
-   ```
+#### Quick Start with Docker Compose (from project root)
+```bash
+# Start all services (backend, frontend, redis, nginx)
+docker-compose up --build
 
-2. **Or use Docker Compose (from project root):**
-   ```bash
-   docker-compose up backend
-   ```
+# Start only backend service
+docker-compose up backend
+
+# View logs
+docker-compose logs -f backend
+```
+
+#### Build and Run Backend Container Only
+```bash
+# Build the image
+docker build -t contractcopilot-backend .
+
+# Run the container
+docker run -p 8000:8000 \
+  -e DEBUG=true \
+  -e ENVIRONMENT=development \
+  contractcopilot-backend
+
+# Run with environment file
+docker run -p 8000:8000 --env-file .env contractcopilot-backend
+```
+
+#### Production Build
+```bash
+# Build production image
+docker build -f Dockerfile.prod -t contractcopilot-backend:prod .
+
+# Run production container
+docker run -p 8000:8000 \
+  -e ENVIRONMENT=production \
+  -e OPENAI_API_KEY=your_key_here \
+  contractcopilot-backend:prod
+```
 
 ## 🏗️ Project Structure
 

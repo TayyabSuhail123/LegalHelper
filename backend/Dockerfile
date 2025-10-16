@@ -5,8 +5,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    UV_CACHE_DIR=/tmp/uv-cache
+    PYTHONPATH=/app
 
 # Set work directory
 WORKDIR /app
@@ -20,7 +19,7 @@ RUN apt-get update \
     && pip install --no-cache-dir uv
 
 # Copy dependency files first (for better Docker layer caching)
-COPY pyproject.toml requirements.txt ./
+COPY requirements.txt ./
 
 # Install Python dependencies with UV
 RUN uv pip install --system --no-cache -r requirements.txt
