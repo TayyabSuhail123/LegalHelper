@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     # CORS settings
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:8080"]
 
+    # File processing settings
+    upload_dir: str = "./uploads"  # Relative to project root, not /tmp
+    max_file_size: int = 50 * 1024 * 1024  # 50MB in bytes
+    allowed_file_types: list[str] = ["pdf", "docx", "txt"]
+    file_cleanup_interval: int = 3600  # 1 hour in seconds
+
     # OpenAI settings (for future use)
     openai_api_key: Optional[str] = None
 

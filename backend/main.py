@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core import settings
 from app.api import health_router
+from app.api.files import router as files_router
 
 
 def create_app() -> FastAPI:
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health_router, prefix=settings.api_v1_prefix, tags=["health"])
+    app.include_router(files_router, prefix=f"{settings.api_v1_prefix}/files", tags=["files"])
 
     # Root endpoint
     @app.get("/")
