@@ -1,22 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Upload, FileText, X, Eye, Loader, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Upload, FileText, X, Eye, Loader, AlertCircle, CheckCircle2, Brain } from 'lucide-react';
 import { SUPPORTED_FILE_TYPES, MAX_FILE_SIZE } from '../constants/features';
 import DocumentViewer from './DocumentViewer';
-import { apiService, type FileDetails } from '../api/apiService';
+import { apiService, type FileDetails, type AnalysisResult } from '../api/apiService';
 
 interface FileUploadProps {
   onFileSelect?: (file: File) => void;
+  onAnalysisComplete: (result: AnalysisResult) => void; // Required for workflow
   className?: string;
 }
 
-type UploadStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
+type UploadStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'analyzing' | 'analysis_completed' | 'error';
 
 const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
+  onAnalysisComplete,
   className = '',
 }) => {
+  console.log('FileUpload component rendered with onAnalysisComplete:', onAnalysisComplete);
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +110,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       
       setUploadStatus('processing');
 
-      // Poll for completion
+      // Poll for text extraction completion
       const pollInterval = setInterval(async () => {
         try {
           const status = await apiService.getProcessingStatus(uploadResponse.file_id);
@@ -120,6 +123,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
             const details = await apiService.getFileDetails(uploadResponse.file_id);
             setFileDetails(details);
             setExtractedText(details.extracted_text || null);
+
+            // Automatically start AI analysis after text extraction
+            await startAIAnalysis(uploadResponse.file_id);
           } else if (status.status === 'failed') {
             clearInterval(pollInterval);
             setUploadStatus('error');
@@ -138,12 +144,45 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
+  const startAIAnalysis = async (fileId: string) => {
+    try {
+      setUploadStatus('analyzing');
+      console.log('Starting AI analysis for file:', fileId);
+      console.log('onAnalysisComplete callback at analysis time:', onAnalysisComplete);
+      
+      // Start AI analysis
+      const analysisResult = await apiService.analyzeDocument(fileId);
+      console.log('AI Analysis result received:', analysisResult);
+      
+      setUploadStatus('analysis_completed');
+      
+      // Add a small delay to make sure the status is visible
+      setTimeout(() => {
+        // Navigate to results page
+        if (onAnalysisComplete && typeof onAnalysisComplete === 'function') {
+          console.log('Calling onAnalysisComplete callback');
+          onAnalysisComplete(analysisResult);
+        } else {
+          console.error('onAnalysisComplete callback not provided or not a function:', onAnalysisComplete);
+        }
+      }, 1000); // 1 second delay
+      
+    } catch (analysisError) {
+      console.error('AI Analysis error:', analysisError);
+      setUploadStatus('error');
+      setError(analysisError instanceof Error ? analysisError.message : 'AI analysis failed');
+    }
+  };
+
   const getStatusIcon = () => {
     switch (uploadStatus) {
       case 'uploading':
       case 'processing':
         return <Loader className="h-5 w-5 animate-spin text-blue-400" />;
+      case 'analyzing':
+        return <Brain className="h-5 w-5 animate-pulse text-purple-400" />;
       case 'completed':
+      case 'analysis_completed':
         return <CheckCircle2 className="h-5 w-5 text-green-400" />;
       case 'error':
         return <AlertCircle className="h-5 w-5 text-red-400" />;
@@ -158,8 +197,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
         return 'Uploading file...';
       case 'processing':
         return 'Extracting text from document...';
+      case 'analyzing':
+        return 'Running AI analysis...';
       case 'completed':
-        return 'Analysis completed!';
+        return 'Text extraction completed!';
+      case 'analysis_completed':
+        return 'AI analysis completed! Redirecting...';
       case 'error':
         return 'Analysis failed';
       default:
@@ -277,7 +320,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                   onClick={handleAnalyzeDocument}
                   className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105"
                 >
-                  Analyze Legal Document
+                  Start AI Analysis
                 </button>
               </div>
             )}
@@ -293,6 +336,32 @@ const FileUpload: React.FC<FileUploadProps> = ({
               </div>
             )}
 
+            {uploadStatus === 'analyzing' && (
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-3 mb-4">
+                  <Brain className="h-8 w-8 text-purple-400 animate-pulse" />
+                  <div>
+                    <div className="text-purple-200 font-medium">AI Analysis in Progress</div>
+                    <div className="text-purple-400 text-sm">Analyzing document content, risks, and legal clauses...</div>
+                  </div>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full animate-pulse" style={{ width: '85%' }}></div>
+                </div>
+              </div>
+            )}
+
+            {uploadStatus === 'analysis_completed' && (
+              <div className="text-center">
+                <div className="animate-pulse text-green-200 mb-2">
+                  ✨ AI Analysis Complete! Redirecting to results...
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
+
             {uploadStatus === 'completed' && extractedText && (
               <div>
                 <h5 className="text-md font-medium text-white mb-3">Extracted Text:</h5>
@@ -301,7 +370,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 </div>
                 <div className="mt-4 p-4 bg-green-500/20 border border-green-500/30 rounded-lg">
                   <p className="text-green-300 text-sm">
-                    ✅ Text extraction completed successfully! 
+                    ✅ Text extraction completed successfully! Starting AI analysis...
                     {fileDetails && (
                       <span className="block mt-1">
                         File ID: {fileDetails.file_id} • 

@@ -100,6 +100,26 @@ class FileStorageManager:
             return self._file_registry[file_id]['path']
         return None
     
+    async def get_file_content(self, file_id: str) -> Optional[bytes]:
+        """
+        Get file content by file ID.
+        
+        Args:
+            file_id: File identifier
+            
+        Returns:
+            File content as bytes, or None if file not found
+        """
+        file_path = await self.get_file_path(file_id)
+        if file_path and file_path.exists():
+            try:
+                with open(file_path, 'rb') as f:
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Failed to read file {file_id}: {e}")
+                return None
+        return None
+    
     async def remove_file(self, file_id: str) -> bool:
         """
         Remove a specific file and its directory.

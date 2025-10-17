@@ -1,3 +1,6 @@
+# Development-only Docker Compose file
+# Frontend runs locally with npm start, only backend services are containerized
+
 services:
   backend:
     build:

@@ -18,9 +18,9 @@ This is a monorepo containing three main components:
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 18+ and npm (for frontend development)
 - Python 3.11+
-- Docker and Docker Compose
+- Docker and Docker Compose (for backend services only)
 - AWS CLI (for deployment)
 - Terraform (for infrastructure)
 
@@ -31,27 +31,36 @@ This is a monorepo containing three main components:
 git clone <repo-url>
 cd autoreviwer
 
-# Backend setup with UV (recommended)
+# Backend setup with Docker Compose
+docker-compose up -d backend redis
+
+# Frontend setup (runs locally, not dockerized)
+cd frontend
+npm install
+npm start
+
+# Or start backend with UV directly
 cd backend
 uv venv
 uv pip install -r requirements.txt
-
-# Start backend
 uv run --with fastapi --with "uvicorn[standard]" --with pydantic-settings uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend setup (in another terminal)
-cd ../frontend
-npm install
-
-# Or start both services from root
-npm run dev
 ```
 
 ## 🔧 Development
 
-- **Backend API**: http://localhost:8000
-- **Frontend App**: http://localhost:3000
+### Development Workflow
+
+- **Backend API**: http://localhost:8000 (Docker containerized)
+- **Frontend App**: http://localhost:3000 (runs locally with npm)
 - **API Docs**: http://localhost:8000/docs
+- **Redis**: http://localhost:6379 (Docker containerized)
+
+### Note on Docker Setup
+
+- The backend and Redis run in Docker containers for consistency
+- The frontend runs locally for faster development iteration
+- Use `docker-compose up -d` to start only the backend services
+- Use `npm start` in the frontend directory for live reloading
 
 ## 🚀 Key Features
 

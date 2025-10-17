@@ -1,5 +1,7 @@
 """File upload and processing API endpoints."""
 
+import logging
+import traceback
 from typing import Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -11,12 +13,27 @@ from app.models.file_processing import (
     UploadedFile
 )
 from app.core.dependencies import FileProcessingServiceDep
+from app.core.document_analysis_service import DocumentAnalysisService
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter()
 
 # In-memory storage for demo (replace with database in production)
 uploaded_files: Dict[str, UploadedFile] = {}
+
+# Document analysis service instance
+analysis_service: DocumentAnalysisService = None
+
+
+def get_analysis_service(file_service: FileProcessingServiceDep) -> DocumentAnalysisService:
+    """Get or create document analysis service."""
+    global analysis_service
+    if analysis_service is None:
+        analysis_service = DocumentAnalysisService(file_service)
+    return analysis_service
 
 
 @router.post("/upload", response_model=FileUploadResponse)
@@ -32,27 +49,35 @@ async def upload_file(
     Returns immediately with file_id for tracking processing status.
     """
     try:
-        # Process file
+        logger.info(f"Starting file upload for: {file.filename}")
+        logger.debug(f"File size: {file.size if hasattr(file, 'size') else 'unknown'}")
+        logger.debug(f"File content type: {file.content_type}")
+        
+        # Process file (basic upload and storage)
         uploaded_file = await file_service.process_file(file)
+        
+        logger.info(f"File upload successful - File ID: {uploaded_file.file_id}")
         
         # Store in memory (replace with database)
         uploaded_files[uploaded_file.file_id] = uploaded_file
         
         return FileUploadResponse(
             success=True,
-            message="File uploaded and processed successfully",
+            message="File uploaded successfully",
             file_id=uploaded_file.file_id,
             processing_status=uploaded_file.processing_status,
-            estimated_processing_time=None  # Immediate processing for now
+            estimated_processing_time=None
         )
         
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        logger.warning(f"HTTP exception during file upload: {he.status_code} - {he.detail}")
+        logger.warning(f"File: {file.filename}")
+        raise he
     except Exception as e:
-        # Log the actual error for debugging but don't expose it to users
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Unexpected error during file upload: {str(e)}")
+        logger.error(f"Unexpected error during file upload for file: {file.filename}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         
         raise HTTPException(
             status_code=500,
@@ -60,10 +85,107 @@ async def upload_file(
         )
 
 
-@router.get("/status/{file_id}", response_model=ProcessingProgress)
-async def get_processing_status(file_id: str) -> ProcessingProgress:
+@router.post("/analyze/{file_id}")
+async def analyze_document(
+    file_id: str,
+    file_service: FileProcessingServiceDep = None
+) -> Dict[str, Any]:
     """
-    Get processing status for an uploaded file.
+    Start comprehensive AI analysis of an uploaded document using LangGraph workflow.
+    
+    Args:
+        file_id: Unique identifier for the uploaded file
+        
+    Returns:
+        Analysis initiation response with tracking information
+    """
+    try:
+        # Check if file exists
+        if file_id not in uploaded_files:
+            raise HTTPException(
+                status_code=404,
+                detail=f"File with ID {file_id} not found"
+            )
+        
+        uploaded_file = uploaded_files[file_id]
+        
+        # Get file content for analysis
+        file_content = await file_service.storage_manager.get_file_content(file_id)
+        if not file_content:
+            raise HTTPException(
+                status_code=404,
+                detail="File content not found"
+            )
+        
+        # Get analysis service and start analysis
+        service = get_analysis_service(file_service)
+        result = await service.analyze_document(
+            file_id=file_id,
+            file_content=file_content,
+            filename=uploaded_file.filename
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Document analysis failed for {file_id}: {str(e)}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.get("/analysis/{file_id}")
+async def get_analysis_result(
+    file_id: str,
+    file_service: FileProcessingServiceDep = None
+) -> Dict[str, Any]:
+    """
+    Get AI analysis result for a document.
+    
+    Args:
+        file_id: Unique identifier for the uploaded file
+        
+    Returns:
+        Complete analysis result including legal analysis, risk assessment, and summary
+    """
+    try:
+        service = get_analysis_service(file_service)
+        result = await service.get_analysis_result(file_id)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Analysis result for file {file_id} not found"
+            )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to get analysis result for {file_id}: {str(e)}")
+        
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve analysis result"
+        )
+
+
+@router.get("/status/{file_id}", response_model=ProcessingProgress)
+async def get_processing_status(
+    file_id: str,
+    file_service: FileProcessingServiceDep = None
+) -> ProcessingProgress:
+    """
+    Get processing status for an uploaded file or analysis.
     
     Args:
         file_id: Unique identifier for the uploaded file
@@ -71,6 +193,7 @@ async def get_processing_status(file_id: str) -> ProcessingProgress:
     Returns:
         Current processing status and progress information
     """
+    # Check basic file upload status first
     if file_id not in uploaded_files:
         raise HTTPException(
             status_code=404,
@@ -79,7 +202,26 @@ async def get_processing_status(file_id: str) -> ProcessingProgress:
     
     uploaded_file = uploaded_files[file_id]
     
-    # Determine progress percentage based on status
+    # Try to get LangGraph analysis status
+    try:
+        service = get_analysis_service(file_service)
+        analysis_status = await service.get_processing_status(file_id)
+        
+        if analysis_status.get("status") != "not_found":
+            # Return analysis status if available
+            return ProcessingProgress(
+                file_id=file_id,
+                status=ProcessingStatus.PROCESSING if analysis_status["status"] == "processing" else ProcessingStatus.COMPLETED,
+                progress_percentage=analysis_status.get("progress_percentage", 0.0),
+                current_step=analysis_status.get("current_step", "Unknown"),
+                estimated_time_remaining=None,
+                error_message=analysis_status.get("error_message")
+            )
+    except Exception:
+        # Fall back to basic file status if analysis status fails
+        pass
+    
+    # Return basic file upload status
     progress_map = {
         ProcessingStatus.UPLOADED: 10.0,
         ProcessingStatus.PROCESSING: 50.0,
@@ -87,11 +229,10 @@ async def get_processing_status(file_id: str) -> ProcessingProgress:
         ProcessingStatus.FAILED: 0.0,
     }
     
-    # Determine current step based on status
     step_map = {
-        ProcessingStatus.UPLOADED: "File uploaded, queued for processing",
+        ProcessingStatus.UPLOADED: "File uploaded, ready for analysis",
         ProcessingStatus.PROCESSING: "Extracting text from document",
-        ProcessingStatus.COMPLETED: "Processing completed successfully",
+        ProcessingStatus.COMPLETED: "File processing completed",
         ProcessingStatus.FAILED: "Processing failed",
     }
     

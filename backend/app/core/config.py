@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
     file_cleanup_interval: int = 3600  # 1 hour in seconds
 
-    # OpenAI settings (for future use)
+    # OpenAI settings
     openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4"
+    openai_max_tokens: int = 2000
+    openai_temperature: float = 0.1
 
     # Langfuse settings (for future use)
     langfuse_public_key: Optional[str] = None

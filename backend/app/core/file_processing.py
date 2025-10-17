@@ -4,6 +4,8 @@ import os
 import tempfile
 import magic
 import aiofiles
+import logging
+import traceback
 from typing import Optional, Tuple
 from pathlib import Path
 
@@ -13,6 +15,9 @@ from fastapi import UploadFile, HTTPException
 
 from app.models.file_processing import FileType, UploadedFile, ProcessingStatus
 from app.core.storage import FileStorageManager
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class FileProcessingService:
@@ -51,34 +56,52 @@ class FileProcessingService:
         Returns:
             Tuple of (is_valid, error_message, file_type)
         """
-        # Check file size
-        if file.size and file.size > self.max_file_size:
-            return False, f"File size ({file.size} bytes) exceeds maximum allowed size ({self.max_file_size} bytes)", None
-        
-        # Read file content for MIME type detection
-        content = await file.read()
-        await file.seek(0)  # Reset file pointer
-        
-        # Detect MIME type
-        mime_type = magic.from_buffer(content, mime=True)
-        
-        if mime_type not in self.ALLOWED_MIME_TYPES:
-            return False, f"Unsupported file type: {mime_type}. Allowed types: {list(self.ALLOWED_MIME_TYPES.keys())}", None
-        
-        file_type = self.ALLOWED_MIME_TYPES[mime_type]
-        
-        # Additional filename extension check
-        file_ext = Path(file.filename).suffix.lower()
-        expected_extensions = {
-            FileType.PDF: [".pdf"],
-            FileType.DOCX: [".docx"],
-            FileType.TXT: [".txt"],
-        }
-        
-        if file_ext not in expected_extensions[file_type]:
-            return False, f"File extension {file_ext} doesn't match detected type {file_type}", None
-        
-        return True, "File validation successful", file_type
+        try:
+            logger.info(f"Validating file: {file.filename}")
+            logger.debug(f"File content type: {file.content_type}")
+            
+            # Check file size
+            if file.size and file.size > self.max_file_size:
+                error_msg = f"File size ({file.size} bytes) exceeds maximum allowed size ({self.max_file_size} bytes)"
+                logger.warning(f"File validation failed - {error_msg}")
+                return False, error_msg, None
+            
+            # Read file content for MIME type detection
+            logger.debug("Reading file content for MIME type detection")
+            content = await file.read()
+            await file.seek(0)  # Reset file pointer
+            
+            # Detect MIME type
+            logger.debug("Detecting MIME type")
+            mime_type = magic.from_buffer(content, mime=True)
+            logger.info(f"Detected MIME type: {mime_type}")
+            
+            if mime_type not in self.ALLOWED_MIME_TYPES:
+                error_msg = f"Unsupported file type: {mime_type}. Allowed types: {list(self.ALLOWED_MIME_TYPES.keys())}"
+                logger.warning(f"File validation failed - {error_msg}")
+                return False, error_msg, None
+            
+            file_type = self.ALLOWED_MIME_TYPES[mime_type]
+            logger.info(f"File type determined: {file_type}")
+            
+            # Additional filename extension check - be more flexible
+            file_ext = Path(file.filename).suffix.lower()
+            allowed_extensions = [".pdf", ".docx", ".txt", ".doc", ".md"]
+            
+            if file_ext not in allowed_extensions:
+                error_msg = f"File extension {file_ext} is not supported. Allowed extensions: {allowed_extensions}"
+                logger.warning(f"File validation failed - {error_msg}")
+                return False, error_msg, None
+            
+            logger.info(f"File validation successful for: {file.filename}")
+            return True, "File validation successful", file_type
+            
+        except Exception as e:
+            logger.error(f"Exception during file validation for file: {file.filename}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False, f"File validation failed: {str(e)}", None
 
     async def extract_text(self, file_path: str, file_type: FileType) -> str:
         """
@@ -95,63 +118,140 @@ class FileProcessingService:
             HTTPException: If text extraction fails
         """
         try:
+            logger.info(f"Starting text extraction from {file_type} file: {file_path}")
+            
             if file_type == FileType.PDF:
-                return await self._extract_pdf_text(file_path)
+                text = await self._extract_pdf_text(file_path)
             elif file_type == FileType.DOCX:
-                return await self._extract_docx_text(file_path)
+                text = await self._extract_docx_text(file_path)
             elif file_type == FileType.TXT:
-                return await self._extract_txt_text(file_path)
+                text = await self._extract_txt_text(file_path)
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
+            
+            logger.info(f"Text extraction successful. Extracted {len(text)} characters")
+            return text
         
         except Exception as e:
+            logger.error(f"Text extraction failed for {file_type} file: {file_path}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Provide more user-friendly error messages
+            if file_type == FileType.PDF and "No text content found" in str(e):
+                detail = "The PDF appears to be image-based or scanned. Please try a text-based PDF or a different file format."
+            elif file_type == FileType.DOCX and "No text content found" in str(e):
+                detail = "The DOCX file appears to be empty or contains only images. Please try a document with text content."
+            elif file_type == FileType.TXT and "No text content found" in str(e):
+                detail = "The text file appears to be empty. Please try a file with content."
+            elif "encoding" in str(e).lower() or "decode" in str(e).lower():
+                detail = "The file has encoding issues. Please try saving it in UTF-8 format or use a different file."
+            else:
+                detail = f"Failed to extract text from {file_type} file. Please try a different file or format."
+            
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to extract text from {file_type} file: {str(e)}"
+                detail=detail
             )
     
     async def _extract_pdf_text(self, file_path: str) -> str:
         """Extract text from PDF file."""
-        text = ""
-        
-        with open(file_path, "rb") as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+        try:
+            logger.debug(f"Extracting PDF text from: {file_path}")
+            text = ""
             
-            for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                text += page.extract_text() + "\n"
-        
-        if not text.strip():
-            raise ValueError("No text content found in PDF file")
-        
-        return text.strip()
+            with open(file_path, "rb") as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                total_pages = len(pdf_reader.pages)
+                logger.debug(f"PDF has {total_pages} pages")
+                
+                for page_num in range(total_pages):
+                    logger.debug(f"Processing page {page_num + 1}/{total_pages}")
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    text += page_text + "\n"
+            
+            if not text.strip():
+                logger.warning(f"No text content found in PDF file: {file_path}")
+                logger.info("This might be a scanned/image-based PDF that requires OCR")
+                raise ValueError("No text content found in PDF file. This might be a scanned document that requires OCR processing.")
+            
+            logger.debug(f"PDF text extraction completed. Total characters: {len(text)}")
+            return text.strip()
+            
+        except Exception as e:
+            logger.error(f"PDF text extraction failed for file: {file_path}")
+            logger.error(f"Error details: {str(e)}")
+            raise
     
     async def _extract_docx_text(self, file_path: str) -> str:
         """Extract text from DOCX file."""
-        doc = Document(file_path)
-        text = ""
-        
-        for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
-        
-        # Also extract text from tables
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    text += cell.text + " "
-                text += "\n"
-        
-        if not text.strip():
-            raise ValueError("No text content found in DOCX file")
-        
-        return text.strip()
+        try:
+            logger.debug(f"Extracting DOCX text from: {file_path}")
+            doc = Document(file_path)
+            text = ""
+            
+            # Extract text from paragraphs
+            paragraph_count = len(doc.paragraphs)
+            logger.debug(f"DOCX has {paragraph_count} paragraphs")
+            for paragraph in doc.paragraphs:
+                text += paragraph.text + "\n"
+            
+            # Also extract text from tables
+            table_count = len(doc.tables)
+            logger.debug(f"DOCX has {table_count} tables")
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text += cell.text + " "
+                    text += "\n"
+            
+            if not text.strip():
+                logger.warning(f"No text content found in DOCX file: {file_path}")
+                raise ValueError("No text content found in DOCX file")
+            
+            logger.debug(f"DOCX text extraction completed. Total characters: {len(text)}")
+            return text.strip()
+            
+        except Exception as e:
+            logger.error(f"DOCX text extraction failed for file: {file_path}")
+            logger.error(f"Error details: {str(e)}")
+            raise
     
     async def _extract_txt_text(self, file_path: str) -> str:
         """Extract text from TXT file."""
-        async with aiofiles.open(file_path, "r", encoding="utf-8") as file:
-            text = await file.read()
-        
-        if not text.strip():
+        try:
+            logger.debug(f"Extracting TXT text from: {file_path}")
+            
+            # Try multiple encodings
+            encodings = ['utf-8', 'utf-16', 'latin-1', 'cp1252']
+            text = None
+            
+            for encoding in encodings:
+                try:
+                    async with aiofiles.open(file_path, "r", encoding=encoding) as file:
+                        text = await file.read()
+                    logger.debug(f"Successfully read TXT file with {encoding} encoding")
+                    break
+                except UnicodeDecodeError:
+                    logger.debug(f"Failed to read with {encoding} encoding, trying next...")
+                    continue
+            
+            if text is None:
+                raise ValueError(f"Could not decode TXT file with any of the supported encodings: {encodings}")
+            
+            if not text.strip():
+                logger.warning(f"No text content found in TXT file: {file_path}")
+                raise ValueError("No text content found in TXT file")
+            
+            logger.debug(f"TXT text extraction completed. Total characters: {len(text)}")
+            return text.strip()
+            
+        except Exception as e:
+            logger.error(f"TXT text extraction failed for file: {file_path}")
+            logger.error(f"Error details: {str(e)}")
+            raise
             raise ValueError("No text content found in TXT file")
         
         return text.strip()
