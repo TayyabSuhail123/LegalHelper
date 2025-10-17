@@ -1,18 +1,69 @@
-# ContractCopilot - AI-Powered Legal Document Risk Scanner
+# ContractCopilot - AI-Powered Legal Document Analysis System
 
-> A production-grade AI system that analyzes legal contracts to identify risky clauses and assess their severity using advanced LLMs.
+> A production-grade multi-agent AI system that provides comprehensive legal document analysis using specialized agents for risk assessment, fraud detection, and legal guidance.
 
 ## 🎯 Project Overview
 
-ContractCopilot is an enterprise-ready legal document analysis platform that helps legal professionals quickly identify and assess risks in contracts. The system uses OpenAI's GPT-4 to analyze uploaded contracts (PDF, DOCX, or text) and provides structured risk reports with plain-language explanations.
+ContractCopilot is an enterprise-ready legal document analysis platform powered by a sophisticated multi-agent AI architecture. The system deploys specialized AI agents to analyze uploaded legal documents (PDF, DOCX, or text) and provides comprehensive reports covering document summaries, risk assessments, fraud detection, legal implications, and actionable recommendations.
+
+## 🤖 Multi-Agent Architecture
+
+Our system employs **5 specialized AI agents**, each with dedicated expertise:
+
+### 📄 **Document Summarizer Agent**
+- Provides clear, plain-English document summaries
+- Identifies document type, purpose, and key parties
+- Extracts important dates and deadlines
+- Makes legal documents accessible to non-lawyers
+
+### ⚠️ **Risk Assessment Agent**
+- Analyzes potential legal risks and liabilities
+- Categorizes risks by severity (LOW/MEDIUM/HIGH/CRITICAL)
+- Identifies problematic clauses and unfavorable terms
+- Provides specific recommendations for each risk
+
+### 🛡️ **Fraud Detection Agent**
+- Scans for suspicious clauses and hidden fees
+- Detects deceptive language and pressure tactics
+- Identifies terms that heavily favor one party
+- Calculates fraud risk scores (0-10 scale)
+
+### ⚖️ **Legal Advisor Agent**
+- Explains legal implications and consequences
+- Clarifies rights and obligations for all parties
+- Identifies enforceability issues
+- Provides compliance guidance
+
+### 📋 **Action Planner Agent**
+- Creates specific action plans and next steps
+- Prioritizes immediate vs. long-term actions
+- Identifies deadlines and critical timeframes
+- Provides structured recommendations timeline
 
 ## 🏗️ Architecture
 
-This is a monorepo containing three main components:
+This is a modern full-stack application with organized multi-agent backend:
 
-- **`frontend/`** - React TypeScript application for contract upload and risk visualization
-- **`backend/`** - Python FastAPI service for document processing and LLM analysis
+- **`frontend/`** - Next.js 15.5.5 with React 19 and TypeScript
+- **`backend/`** - Python FastAPI with organized multi-agent system
 - **`infra/`** - Terraform infrastructure as code for AWS deployment
+
+### Backend Agent Organization
+```
+backend/app/agents/
+├── base_agent.py              # Base class for all agents
+├── document_summarizer.py     # Document analysis and summarization
+├── risk_assessor.py          # Risk identification and assessment
+├── fraud_detector.py         # Fraud and suspicious clause detection
+├── legal_advisor.py          # Legal implications and guidance
+├── action_planner.py         # Action planning and recommendations
+└── prompts/                  # Dedicated prompt files for each agent
+    ├── document_summarizer.prompt
+    ├── risk_assessor.prompt
+    ├── fraud_detector.prompt
+    ├── legal_advisor.prompt
+    └── action_planner.prompt
+```
 
 ## ⚡ Quick Start
 
@@ -50,37 +101,92 @@ uv run --with fastapi --with "uvicorn[standard]" --with pydantic-settings uvicor
 
 ### Development Workflow
 
-- **Backend API**: http://localhost:8000 (Docker containerized)
-- **Frontend App**: http://localhost:3000 (runs locally with npm)
-- **API Docs**: http://localhost:8000/docs
-- **Redis**: http://localhost:6379 (Docker containerized)
+- **Backend API**: http://localhost:8000 (Docker containerized with multi-agent system)
+- **Frontend App**: http://localhost:3000 (Next.js with live reloading)
+- **API Docs**: http://localhost:8000/docs (Interactive Swagger documentation)
+- **Redis**: http://localhost:6379 (Docker containerized for session management)
 
 ### Note on Docker Setup
 
 - The backend and Redis run in Docker containers for consistency
-- The frontend runs locally for faster development iteration
+- The frontend runs locally for faster development iteration  
 - Use `docker-compose up -d` to start only the backend services
 - Use `npm start` in the frontend directory for live reloading
+- The multi-agent system is organized with individual agent files and dedicated prompts
 
-## 🚀 Key Features
+### Current Tech Stack
 
-- **Multi-format Support**: PDF, DOCX, and plain text contracts
-- **AI-Powered Analysis**: GPT-4 clause detection and risk assessment
-- **Risk Classification**: Low/Medium/High severity levels
-- **Plain Language**: Human-readable explanations of legal risks
-- **Structured Reports**: JSON and PDF export capabilities
-- **Production Ready**: Full observability, security, and deployment automation
+**Backend:**
+- FastAPI with Python 3.11+
+- OpenAI GPT-4 Turbo for AI processing
+- Multi-agent architecture with specialized agents
+- Docker containerization
+- Redis for session management
 
-## 📊 Risk Detection Categories
+**Frontend:**
+- Next.js 15.5.5 with App Router
+- React 19 with TypeScript
+- Tailwind CSS for styling
+- Real-time status updates
+- Responsive design
 
-- Termination clauses
-- Indemnification terms
-- Intellectual Property rights
-- Confidentiality obligations
-- Arbitration and Jurisdiction
-- Liability limitations
-- Payment terms
-- Data protection clauses
+## 🚀 Current Features (✅ Built)
+
+### **Core Multi-Agent Analysis System**
+- ✅ **5 Specialized AI Agents** with dedicated expertise areas
+- ✅ **Organized Agent Architecture** with individual prompt files
+- ✅ **GPT-4 Turbo Integration** for handling large documents
+- ✅ **Multi-format Support**: PDF, DOCX, and plain text contracts
+- ✅ **Comprehensive Analysis Pipeline** covering all aspects of legal documents
+
+### **Document Processing & Analysis**
+- ✅ **Document Summarization** in plain English
+- ✅ **Risk Assessment** with severity classification (LOW/MEDIUM/HIGH/CRITICAL)
+- ✅ **Fraud Detection** with suspicious clause identification
+- ✅ **Legal Implications Analysis** with rights and obligations breakdown
+- ✅ **Action Planning** with prioritized recommendations and timelines
+
+### **Technical Infrastructure**
+- ✅ **FastAPI Backend** with async processing
+- ✅ **Next.js 15.5.5 Frontend** with React 19 and TypeScript
+- ✅ **Docker Containerization** for backend services
+- ✅ **Redis Integration** for session management
+- ✅ **File Upload & Processing** with validation
+- ✅ **Error Handling & Logging** throughout the system
+
+### **User Experience**
+- ✅ **Intuitive Upload Interface** with drag-and-drop support
+- ✅ **Real-time Processing Status** with progress indicators
+- ✅ **Comprehensive Results Display** with organized sections
+- ✅ **Mobile-Responsive Design** for all devices
+- ✅ **Clean, Professional UI** with modern styling
+
+## 🔮 Planned Features (🚧 Coming Soon)
+
+### **Enhanced AI Capabilities**
+- 🚧 **Document Comparison Agent** - Compare multiple contracts side-by-side
+- 🚧 **Contract Templates Generator** - Create contract templates based on analysis
+- 🚧 **Clause Library Integration** - Build searchable database of analyzed clauses
+- 🚧 **Language Translation Agent** - Multi-language document support
+
+### **Advanced Analysis Features**
+- 🚧 **Document Chunking for Large Files** - Handle extremely large documents (100+ pages)
+- 🚧 **Rate Limiting & Queue Management** - Handle high-volume processing
+- 🚧 **Batch Document Processing** - Analyze multiple documents simultaneously
+- 🚧 **Historical Analysis Tracking** - Track changes in contract terms over time
+
+
+### **Integration & Export**
+- 🚧 **PDF Report Generation** - Professional formatted reports
+- 🚧 **API for Third-party Integration** - Connect with legal software
+- 🚧 **Webhook Notifications** - Real-time analysis completion alerts
+- 🚧 **Export to Legal Databases** - Integration with case management systems
+
+### **Performance & Monitoring**
+- 🚧 **Langfuse LLM Tracing** - Detailed AI performance monitoring
+- 🚧 **Advanced Caching** - Reduce processing time for similar documents
+- 🚧 **Performance Analytics Dashboard** - System usage and performance metrics
+- 🚧 **Cost Optimization** - Smart model selection based on document complexity
 
 ## 🛡️ Security & Compliance
 
