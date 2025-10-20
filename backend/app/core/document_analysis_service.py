@@ -58,11 +58,26 @@ class DocumentAnalysisService:
             # Cache the result
             self._analysis_cache[file_id] = result
             
+            # Clean up the uploaded file after successful analysis (if enabled)
+            if self.file_service.settings.auto_cleanup_after_analysis:
+                logger.info(f"Auto-cleanup enabled, removing file {file_id} after successful analysis")
+                await self._cleanup_file_after_analysis(file_id)
+            else:
+                logger.info(f"Auto-cleanup disabled, keeping file {file_id} for manual cleanup")
+            
             # Return formatted response
             return self._format_analysis_response(result)
             
         except Exception as e:
             logger.error(f"Document analysis failed for {file_id}: {str(e)}")
+            
+            # Clean up file on error to prevent storage bloat (if enabled)
+            if self.file_service.settings.auto_cleanup_after_analysis:
+                try:
+                    await self._cleanup_file_after_analysis(file_id)
+                except Exception as cleanup_error:
+                    logger.error(f"Failed to cleanup file {file_id} after analysis error: {cleanup_error}")
+            
             return {
                 "file_id": file_id,
                 "status": "error",
@@ -252,3 +267,27 @@ class DocumentAnalysisService:
             }
         
         return response
+    
+    async def _cleanup_file_after_analysis(self, file_id: str) -> None:
+        """
+        Clean up uploaded file after analysis is complete.
+        
+        This prevents storage bloat by automatically removing files
+        once they've been processed and results cached.
+        
+        Args:
+            file_id: File identifier to clean up
+        """
+        try:
+            # Remove file from storage manager
+            success = await self.file_service.storage_manager.remove_file(file_id)
+            
+            if success:
+                logger.info(f"Successfully cleaned up file {file_id} after analysis completion")
+            else:
+                logger.warning(f"File {file_id} not found for cleanup (may have been already removed)")
+                
+        except Exception as e:
+            # Log error but don't fail the analysis - cleanup is not critical
+            logger.error(f"Failed to cleanup file {file_id} after analysis: {str(e)}")
+            logger.error("Analysis results are still available, only file cleanup failed")

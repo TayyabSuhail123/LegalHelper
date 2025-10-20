@@ -17,7 +17,8 @@ def get_file_processing_service() -> FileProcessingService:
     """
     return FileProcessingService(
         upload_dir=settings.upload_dir,
-        max_file_size=settings.max_file_size
+        max_file_size=settings.max_file_size,
+        settings=settings
     )
 
 

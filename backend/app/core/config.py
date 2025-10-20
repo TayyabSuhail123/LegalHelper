@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     max_file_size: int = 50 * 1024 * 1024  # 50MB in bytes
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
     file_cleanup_interval: int = 3600  # 1 hour in seconds
+    auto_cleanup_after_analysis: bool = True  # Clean up files after analysis completes
 
     # OpenAI settings
     openai_api_key: Optional[str] = None

@@ -15,6 +15,7 @@ from fastapi import UploadFile, HTTPException
 
 from app.models.file_processing import FileType, UploadedFile, ProcessingStatus
 from app.core.storage import FileStorageManager
+from app.core.config import Settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -30,16 +31,23 @@ class FileProcessingService:
         "text/plain": FileType.TXT,
     }
     
-    def __init__(self, upload_dir: str = "./uploads", max_file_size: int = 50 * 1024 * 1024):
+    def __init__(self, upload_dir: str = "./uploads", max_file_size: int = 50 * 1024 * 1024, settings: Settings = None):
         """
         Initialize the file processing service.
         
         Args:
             upload_dir: Directory for temporary file storage
             max_file_size: Maximum allowed file size in bytes
+            settings: Application settings instance
         """
+        from app.core.config import settings as global_settings
+        self.settings = settings or global_settings
+        self.upload_dir = upload_dir
         self.max_file_size = max_file_size
-        self.storage_manager = FileStorageManager(upload_dir)
+        self.storage_manager = FileStorageManager(
+            base_dir=upload_dir,
+            cleanup_interval=self.settings.file_cleanup_interval
+        )
     
     @property
     def MAX_FILE_SIZE(self) -> int:

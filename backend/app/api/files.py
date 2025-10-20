@@ -388,6 +388,50 @@ async def get_storage_stats(
     stats = await file_service.storage_manager.get_storage_stats()
     return {
         "storage_stats": stats,
-        "cleanup_enabled": True,
+        "cleanup_enabled": file_service.settings.auto_cleanup_after_analysis,
         "cleanup_interval_hours": file_service.storage_manager.cleanup_interval / 3600
     }
+
+
+@router.post("/admin/cleanup")
+async def manual_cleanup(
+    max_age_hours: int = 24,
+    file_service: FileProcessingServiceDep = None
+) -> Dict[str, Any]:
+    """
+    Manually trigger file cleanup.
+    
+    Args:
+        max_age_hours: Maximum age of files to keep (default 24 hours)
+        
+    Returns:
+        Cleanup operation result
+    """
+    try:
+        # Get stats before cleanup
+        stats_before = await file_service.storage_manager.get_storage_stats()
+        
+        # Perform cleanup
+        await file_service.storage_manager.cleanup_old_files(max_age_hours)
+        
+        # Get stats after cleanup
+        stats_after = await file_service.storage_manager.get_storage_stats()
+        
+        files_removed = stats_before["total_files"] - stats_after["total_files"]
+        space_freed_mb = (stats_before["total_size_mb"] - stats_after["total_size_mb"])
+        
+        return {
+            "success": True,
+            "message": f"Cleanup completed successfully",
+            "files_removed": files_removed,
+            "space_freed_mb": round(space_freed_mb, 2),
+            "stats_before": stats_before,
+            "stats_after": stats_after
+        }
+        
+    except Exception as e:
+        logger.error(f"Manual cleanup failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Cleanup failed: {str(e)}"
+        )
