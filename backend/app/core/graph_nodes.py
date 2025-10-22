@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime, timezone
 
-from langchain.schema import HumanMessage
+
 from langchain_openai import ChatOpenAI
 
 from app.core.graph_state import (
@@ -18,7 +18,7 @@ from app.core.graph_state import (
     RiskCategory,
     Risk
 )
-from app.core.file_processing import FileProcessingService
+from app.services.file_processing import FileProcessingService
 from app.models.file_processing import FileType
 from app.core.config import settings
 
@@ -128,7 +128,7 @@ class DocumentAnalysisAgents:
                 """
                 
                 try:
-                    response = await llm.ainvoke([HumanMessage(content=prompt)])
+                    response = await llm.ainvoke([{"role": "user", "content": prompt}])
                     result = response.content.strip().split(',')
                     
                     if len(result) == 2:

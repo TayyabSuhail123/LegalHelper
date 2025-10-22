@@ -1,10 +1,7 @@
-# Development-only Docker Compose file
-# Frontend runs locally with npm start, only backend services are containerized
-
 services:
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -16,7 +13,7 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
     volumes:
-      - ./backend:/app
+      - .:/app
       - /app/.venv
       - /app/__pycache__
     healthcheck:
@@ -28,7 +25,7 @@ services:
     depends_on:
       - redis
     networks:
-      - contractcopilot
+      - backend
 
   redis:
     image: redis:7-alpine
@@ -37,11 +34,11 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - contractcopilot
+      - backend
 
 volumes:
   redis_data:
 
 networks:
-  contractcopilot:
+  backend:
     driver: bridge

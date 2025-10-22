@@ -18,7 +18,6 @@ from app.models.file_processing import (
 )
 from app.core.dependencies import FileProcessingServiceDep, FileServiceDep, AnalysisServiceDep
 from app.services.file_service import FileService
-from app.services.analysis_service import AnalysisService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -79,8 +78,8 @@ def validate_pagination(limit: int, offset: int) -> tuple[int, int]:
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
-    file: UploadFile = File(..., description="Contract file to upload (PDF, DOCX, TXT)"),
-    file_service: FileService = Depends()
+    file_service: FileServiceDep,
+    file: UploadFile = File(..., description="Contract file to upload (PDF, DOCX, TXT)")
 ) -> FileUploadResponse:
     """
     Upload a contract file for processing.
@@ -123,7 +122,8 @@ async def upload_file(
 @router.post("/analyze/{file_id}")
 async def analyze_document(
     file_id: str,
-    analysis_service: AnalysisService = Depends()
+    analysis_service: AnalysisServiceDep,
+    file_service: FileServiceDep
 ) -> Dict[str, Any]:
     """
     Start comprehensive AI analysis of an uploaded document using LangGraph workflow.
@@ -138,8 +138,21 @@ async def analyze_document(
         # Validate file ID format
         validate_file_id(file_id)
         
-        # Use service layer for analysis
-        result = await analysis_service.start_analysis(file_id)
+        # Get file content and metadata
+        file_content = await file_service.get_file_content(file_id)
+        if not file_content:
+            raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+            
+        file_details = await file_service.get_file_details(file_id)
+        if not file_details:
+            raise HTTPException(status_code=404, detail=f"File details for {file_id} not found")
+        
+        # Use core analysis service directly
+        result = await analysis_service.analyze_document(
+            file_id=file_id,
+            file_content=file_content,
+            filename=file_details.get('filename', 'unknown.pdf')
+        )
         
         return result
         
@@ -157,7 +170,7 @@ async def analyze_document(
 @router.get("/analysis/{file_id}")
 async def get_analysis_result(
     file_id: str,
-    analysis_service: AnalysisService = Depends()
+    analysis_service: AnalysisServiceDep
 ) -> Dict[str, Any]:
     """
     Get AI analysis result for a document.
@@ -171,7 +184,7 @@ async def get_analysis_result(
     try:
         validate_file_id(file_id)
         
-        result = await analysis_service.get_result(file_id)
+        result = await analysis_service.get_analysis_result(file_id)
         
         if not result:
             raise HTTPException(
@@ -193,9 +206,9 @@ async def get_analysis_result(
 
 
 @router.get("/status/{file_id}", response_model=ProcessingProgress)
-async def get_processing_status(
+async def get_processing_progress(
     file_id: str,
-    file_service: FileService = Depends()
+    file_service: FileServiceDep
 ) -> ProcessingProgress:
     """
     Get processing status for an uploaded file or analysis.
@@ -215,7 +228,7 @@ async def get_processing_status(
 @router.get("/files/{file_id}", response_model=UploadedFile)
 async def get_file_details(
     file_id: str,
-    file_service: FileService = Depends()
+    file_service: FileServiceDep
 ) -> UploadedFile:
     """Get detailed information about an uploaded file."""
     validate_file_id(file_id)
@@ -240,9 +253,9 @@ async def get_file_details(
 
 @router.get("/files", response_model=Dict[str, Any])
 async def list_uploaded_files(
+    file_service: FileServiceDep,
     limit: int = DEFAULT_PAGE_SIZE,
-    offset: int = 0,
-    file_service: FileService = Depends()
+    offset: int = 0
 ) -> Dict[str, Any]:
     """List all uploaded files with pagination."""
     limit, offset = validate_pagination(limit, offset)
@@ -260,7 +273,7 @@ async def list_uploaded_files(
 @router.delete("/files/{file_id}")
 async def delete_file(
     file_id: str,
-    file_service: FileService = Depends()
+    file_service: FileServiceDep
 ) -> JSONResponse:
     """Delete an uploaded file and its data."""
     validate_file_id(file_id)
@@ -291,7 +304,7 @@ async def delete_file(
 
 @router.get("/supported-formats")
 async def get_supported_formats(
-    file_service: FileProcessingServiceDep = Depends()
+    file_service: FileProcessingServiceDep
 ) -> Dict[str, Any]:
     """
     Get information about supported file formats.
@@ -327,7 +340,7 @@ async def get_supported_formats(
 
 @router.get("/storage/stats", response_model=StorageStatsResponse)
 async def get_storage_stats(
-    file_service: FileService = Depends()
+    file_service: FileServiceDep
 ) -> StorageStatsResponse:
     """Get storage statistics."""
     try:
@@ -347,8 +360,8 @@ async def get_storage_stats(
 
 @router.post("/admin/cleanup", response_model=CleanupResponse)
 async def manual_cleanup(
-    max_age_hours: int = DEFAULT_CLEANUP_AGE_HOURS,
-    file_service: FileProcessingServiceDep = Depends()
+    file_service: FileProcessingServiceDep,
+    max_age_hours: int = DEFAULT_CLEANUP_AGE_HOURS
 ) -> CleanupResponse:
     """
     Manually trigger file cleanup.

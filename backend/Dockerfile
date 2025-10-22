@@ -1,11 +1,13 @@
-# ContractCopilot Backend Dockerfile with UV
+# Legal Helper Backend - Unified Dockerfile
+# Supports both development and production environments
 
 FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    ENVIRONMENT=${ENVIRONMENT:-development}
 
 # Set work directory
 WORKDIR /app
@@ -42,4 +44,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# In development: uses uvicorn with auto-reload
+# In production: uses gunicorn with uvicorn workers (if installed)
+CMD if [ "$ENVIRONMENT" = "production" ]; then \
+        gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000; \
+    else \
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload; \
+    fi

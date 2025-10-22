@@ -12,7 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 from app.core.multi_agent_system import LegalAnalysisAgents
-from app.core.file_processing import FileProcessingService
+from app.services.file_processing import FileProcessingService
 
 logger = logging.getLogger(__name__)
 

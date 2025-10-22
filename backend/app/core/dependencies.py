@@ -4,10 +4,10 @@ from functools import lru_cache
 from typing import Annotated
 from fastapi import Depends
 
-from app.core.file_processing import FileProcessingService
+from app.services.file_processing import FileProcessingService
 from app.core.config import settings
 from app.services.file_service import FileService
-from app.services.analysis_service import AnalysisService
+from app.services.document_analysis_service import DocumentAnalysisService
 
 
 @lru_cache()
@@ -41,20 +41,17 @@ def get_file_service(
 
 def get_analysis_service(
     file_service: FileService = Depends(get_file_service)
-) -> AnalysisService:
+) -> DocumentAnalysisService:
     """
-    Get analysis service instance with repository pattern.
+    Create and configure analysis service dependency.
     
-    Args:
-        file_service: File service dependency
-        
     Returns:
-        Analysis service with business logic
+        DocumentAnalysisService: Configured analysis service instance
     """
-    return AnalysisService(file_service)
+    return DocumentAnalysisService(file_service.file_processing_service)
 
 
-# Type aliases for dependency injection
+# Create FastAPI dependency annotations
 FileProcessingServiceDep = Annotated[FileProcessingService, Depends(get_file_processing_service)]
 FileServiceDep = Annotated[FileService, Depends(get_file_service)]
-AnalysisServiceDep = Annotated[AnalysisService, Depends(get_analysis_service)]
+AnalysisServiceDep = Annotated[DocumentAnalysisService, Depends(get_analysis_service)]

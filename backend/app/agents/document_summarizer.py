@@ -60,12 +60,13 @@ class DocumentSummarizerAgent(BaseAgent):
             
             # Load prompt and call LLM
             prompt = self._load_prompt()
-            llm_response = await self._call_llm(prompt, document_text)
+            # Try AI analysis first
+            ai_response = await self._call_llm(prompt, document_text)
             
-            if llm_response:
+            if ai_response:
                 try:
                     # Parse JSON response
-                    result = json.loads(llm_response)
+                    result = json.loads(ai_response)
                     
                     # Update state with AI results
                     state["document_summary"] = result.get("document_summary", "")

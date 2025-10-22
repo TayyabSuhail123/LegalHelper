@@ -4,7 +4,8 @@ import React from 'react';
 import { 
   FileText, 
   AlertTriangle, 
-  CheckCircle2, 
+  CheckCircle2,
+  CheckCircle, 
   XCircle, 
   Shield, 
   Scale, 
@@ -628,7 +629,117 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Enhanced Domain Assessment (if available) */}
+              {analysisResult.domain_assessment && (
+                <div className="mt-6 p-4 bg-purple-900/30 rounded-lg border border-purple-700/50">
+                  <h3 className="text-lg font-semibold text-purple-300 mb-3 flex items-center space-x-2">
+                    <Shield className="h-5 w-5" />
+                    <span>Enhanced Risk Assessment</span>
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-gray-300 text-sm">Risk Level:</span>
+                      <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border ml-2 ${
+                        analysisResult.domain_assessment.risk_level === 'low' 
+                          ? 'border-green-500/50 bg-green-900/20 text-green-300'
+                          : analysisResult.domain_assessment.risk_level === 'medium'
+                          ? 'border-yellow-500/50 bg-yellow-900/20 text-yellow-300'
+                          : 'border-red-500/50 bg-red-900/20 text-red-300'
+                      }`}>
+                        <span className="font-medium capitalize">
+                          {analysisResult.domain_assessment.risk_level}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <span className="text-gray-300 text-sm">Confidence:</span>
+                      <span className="text-white font-medium ml-2">
+                        {Math.round(analysisResult.domain_assessment.confidence_score * 100)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {analysisResult.domain_assessment.risk_factors && analysisResult.domain_assessment.risk_factors.length > 0 && (
+                    <div className="mt-4">
+                      <span className="text-gray-300 text-sm">Key Risk Factors:</span>
+                      <div className="mt-2 space-y-1">
+                        {analysisResult.domain_assessment.risk_factors.map((factor, index) => (
+                          <div key={index} className="flex items-center space-x-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+                            <span className="text-gray-300 text-sm">{factor}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {analysisResult.domain_assessment.is_high_risk && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-900/50 text-red-300 border border-red-700/50">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        High Risk
+                      </span>
+                    )}
+                    {analysisResult.domain_assessment.is_critical_risk && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-900/70 text-red-200 border border-red-600/50">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Critical Risk
+                      </span>
+                    )}
+                    {analysisResult.domain_assessment.requires_manual_review && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Manual Review Required
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Enhanced File Information (if available) */}
+            {analysisResult.domain_info && (
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl p-6 mb-6">
+                <h2 className="text-xl font-semibold text-white mb-4 flex items-center space-x-2">
+                  <FileText className="h-6 w-6 text-purple-400" />
+                  <span>File Details</span>
+                </h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <span className="text-gray-400 text-sm">File Size:</span>
+                    <p className="text-white font-medium">{analysisResult.domain_info.size_mb.toFixed(2)} MB</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-sm">Processed By:</span>
+                    <p className="text-white font-medium">{analysisResult.domain_info.uploaded_by}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 text-sm">Status:</span>
+                    <div className="flex items-center space-x-2">
+                      {analysisResult.domain_info.analysis_started ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700/50">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Analysis Started
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-900/50 text-gray-300 border border-gray-700/50">
+                          Pending
+                        </span>
+                      )}
+                      {analysisResult.domain_info.can_retry && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300 border border-blue-700/50">
+                          Retryable
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Processing Details */}
             <div className="bg-black/40 backdrop-blur-sm rounded-xl p-6">

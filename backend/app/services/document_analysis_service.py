@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
 from app.core.document_workflow import DocumentAnalysisWorkflow
-from app.core.file_processing import FileProcessingService
+from app.services.file_processing import FileProcessingService
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 
 logger = logging.getLogger(__name__)

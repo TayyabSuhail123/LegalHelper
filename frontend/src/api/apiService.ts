@@ -154,6 +154,25 @@ export interface AnalysisResult {
   analysis_status?: string;
   risk_assessment?: RiskAssessment;
   summary?: DocumentSummary;
+  
+  // Enhanced domain-driven fields (from UnifiedAnalysisService)
+  domain_info?: {
+    file_id: string;
+    filename: string;
+    size_mb: number;
+    uploaded_by: string;
+    analysis_started: boolean;
+    can_retry: boolean;
+  };
+  
+  domain_assessment?: {
+    risk_level: string;
+    confidence_score: number;
+    risk_factors: string[];
+    is_high_risk: boolean;
+    is_critical_risk: boolean;
+    requires_manual_review: boolean;
+  };
 }
 
 class ApiService {

@@ -1,9 +1,13 @@
-"""Service layer for business logic abstraction."""
+"""Services layer for business logic."""
 
 from .file_service import FileService
-from .analysis_service import AnalysisService
+from .file_processing import FileProcessingService
+from .document_analysis_service import DocumentAnalysisService
+from .storage import FileStorageManager
 
 __all__ = [
     "FileService",
-    "AnalysisService"
+    "FileProcessingService", 
+    "DocumentAnalysisService",
+    "FileStorageManager"
 ]

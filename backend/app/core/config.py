@@ -30,12 +30,12 @@ class Settings(BaseSettings):
     max_file_size: int = 50 * 1024 * 1024  # 50MB in bytes
     allowed_file_types: list[str] = ["pdf", "docx", "txt"]
     file_cleanup_interval: int = 3600  # 1 hour in seconds
-    auto_cleanup_after_analysis: bool = True  # Clean up files after analysis completes
+    auto_cleanup_after_analysis: bool = False  # Clean up files after analysis completes
 
     # OpenAI settings
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4-turbo"
-    openai_max_tokens: int = 2000
+    openai_model: str = "gpt-3.5-turbo"  # Using gpt-3.5-turbo for better rate limits
+    openai_max_tokens: int = 1000  # Reduced to fit within rate limits
     openai_temperature: float = 0.1
 
     # Langfuse settings (for future use)

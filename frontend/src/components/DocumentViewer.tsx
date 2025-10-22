@@ -58,7 +58,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ file, className = '' })
             }
           </p>
           <p className="text-gray-400 text-xs mt-2">
-            Click "Analyze Legal Document" to extract and analyze the content.
+            Click &quot;Analyze Legal Document&quot; to extract and analyze the content.
           </p>
         </div>
       </div>

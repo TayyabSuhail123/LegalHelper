@@ -14,7 +14,7 @@ from docx import Document
 from fastapi import UploadFile, HTTPException
 
 from app.models.file_processing import FileType, UploadedFile, ProcessingStatus
-from app.core.storage import FileStorageManager
+from app.services.storage import FileStorageManager
 from app.core.config import Settings
 
 # Configure logging
@@ -31,7 +31,7 @@ class FileProcessingService:
         "text/plain": FileType.TXT,
     }
     
-    def __init__(self, upload_dir: str = "./uploads", max_file_size: int = 50 * 1024 * 1024, settings: Settings = None):
+    def __init__(self, upload_dir: str = "./uploads", max_file_size: int = 50 * 1024 * 1024, settings: Optional[Settings] = None):
         """
         Initialize the file processing service.
         

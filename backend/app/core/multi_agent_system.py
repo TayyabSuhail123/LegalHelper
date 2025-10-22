@@ -7,7 +7,7 @@ import logging
 from typing import Dict, Any, List
 
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
-from app.core.file_processing import FileProcessingService
+from app.services.file_processing import FileProcessingService, FileType
 from app.agents.document_summarizer import DocumentSummarizerAgent
 from app.agents.risk_assessor import RiskAssessorAgent
 from app.agents.fraud_detector import FraudDetectorAgent
@@ -30,147 +30,296 @@ class LegalAnalysisAgents:
         self.legal_advisor = LegalAdvisorAgent()
         self.action_planner = ActionPlannerAgent()
 
-    async def text_extraction_node(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """Extract text from the uploaded document."""
-        logger.info(f"Starting text extraction for file: {state['file_id']}")
-        
+    async def extract_text_content(self, state: Dict[str, Any]) -> None:
+        """Extract text content from the file for analysis."""
         try:
-            state["current_step"] = "Extracting text from document"
-            state["progress_percentage"] = 20.0
-            state["text_extraction_status"] = ProcessingStatus.IN_PROGRESS
+            logger.info("MultiAgentSystem: Starting text extraction")
             
-            # Save content temporarily and extract text
-            temp_path = await self.file_service.storage_manager.store_temp_file(
-                state["file_content"], 
-                state["filename"], 
-                state["file_id"]
-            )
+            # Check if text is already extracted
+            if state.get("extracted_text"):
+                logger.info(f"MultiAgentSystem: Text already extracted. Length: {len(state['extracted_text'])}")
+                state["text_extraction_status"] = ProcessingStatus.COMPLETED
+                return
             
-            # Get file type for processing
-            from app.models.file_processing import FileType
+            # Create temporary file from bytes
+            import tempfile
+            import os
             
-            file_type_map = {
-                "pdf": FileType.PDF,
-                "docx": FileType.DOCX,
-                "txt": FileType.TXT
-            }
-            file_type = file_type_map.get(state["file_type"], FileType.TXT)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{state['file_type']}") as temp_file:
+                temp_file.write(state["file_content"])
+                temp_path = temp_file.name
             
-            # Extract text using existing service
-            extracted_text = await self.file_service.extract_text(str(temp_path), file_type)
-            
-            state["extracted_text"] = extracted_text
-            state["text_extraction_status"] = ProcessingStatus.COMPLETED
-            state["progress_percentage"] = 30.0
-            
-            logger.info(f"Text extraction completed for file: {state['file_id']}")
-            
+            try:
+                # Determine file type for extraction
+                file_extension = state['file_type'].lower()
+                if file_extension == 'pdf':
+                    file_type = FileType.PDF
+                elif file_extension in ['docx', 'doc']:
+                    file_type = FileType.DOCX
+                else:
+                    file_type = FileType.TXT
+                
+                logger.info(f"MultiAgentSystem: Extracting text from {file_type} file")
+                
+                # Extract text using file service
+                extracted_text = await self.file_service.extract_text(str(temp_path), file_type)
+                
+                # Store in state
+                state["extracted_text"] = extracted_text
+                state["text_extraction_status"] = ProcessingStatus.COMPLETED
+                
+                logger.info(f"MultiAgentSystem: Text extraction completed. Length: {len(extracted_text) if extracted_text else 0}")
+                
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                    
         except Exception as e:
-            logger.error(f"Text extraction failed for file {state['file_id']}: {str(e)}")
+            logger.error(f"MultiAgentSystem: Error extracting text: {str(e)}")
             state["text_extraction_status"] = ProcessingStatus.FAILED
-            state["error_message"] = f"Text extraction failed: {str(e)}"
-            state["failed_step"] = "text_extraction"
+            raise
+
+    # Workflow compatibility methods
+    async def text_extraction_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Text extraction node for workflow compatibility."""
+        await self.extract_text_content(state)
+        return state
+        
+    async def document_summarizer_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Document summarizer agent node."""
+        try:
+            logger.info("Starting document summarizer agent")
+            state["current_step"] = "Analyzing document content"
+            state["progress_percentage"] = 40.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for document summarizer")
+                return state
+                
+            # Run document summarizer
+            await self.document_summarizer.analyze(state)
+            state["progress_percentage"] = 50.0
+            
+            logger.info("Document summarizer agent completed")
+            
+        except Exception as e:
+            logger.error(f"Document summarizer agent failed: {str(e)}")
+            state["error_message"] = f"Document summarizer failed: {str(e)}"
             
         return state
-
-    async def document_summarizer_agent(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """
-        🏷️ Agent 1: Document Summarizer
-        Uses the organized DocumentSummarizerAgent class.
-        """
-        logger.info(f"🏷️ Document Summarizer Agent starting for file: {state['file_id']}")
         
+    async def risk_assessment_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Risk assessment agent node."""
         try:
-            state = await self.document_summarizer.analyze(state)
-            logger.info(f"✅ Document Summarizer Agent completed for file: {state['file_id']}")
-        except Exception as e:
-            logger.error(f"❌ Document Summarizer Agent failed for file {state['file_id']}: {str(e)}")
-            state["error_message"] = f"Document summarization failed: {str(e)}"
-            state["failed_step"] = "document_summarizer"
+            logger.info("Starting risk assessment agent")
+            state["current_step"] = "Assessing legal risks"
+            state["progress_percentage"] = 60.0
             
-        return state
-
-    async def risk_assessment_agent(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """
-        ⚠️ Agent 2: Risk Assessment Agent
-        Uses the organized RiskAssessorAgent class.
-        """
-        logger.info(f"⚠️ Risk Assessment Agent starting for file: {state['file_id']}")
-        
-        try:
-            state = await self.risk_assessor.analyze(state)
-            logger.info(f"✅ Risk Assessment Agent completed for file: {state['file_id']}")
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for risk assessment")
+                return state
+                
+            # Run risk assessor
+            await self.risk_assessor.analyze(state)
+            state["progress_percentage"] = 70.0
+            
+            logger.info("Risk assessment agent completed")
+            
         except Exception as e:
-            logger.error(f"❌ Risk Assessment Agent failed for file {state['file_id']}: {str(e)}")
+            logger.error(f"Risk assessment agent failed: {str(e)}")
             state["error_message"] = f"Risk assessment failed: {str(e)}"
-            state["failed_step"] = "risk_assessment"
             
         return state
-
-    async def fraud_detection_agent(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """
-        🛡️ Agent 3: Fraud Detection Agent
-        Uses the organized FraudDetectorAgent class.
-        """
-        logger.info(f"🛡️ Fraud Detection Agent starting for file: {state['file_id']}")
         
+    async def fraud_detection_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Fraud detection agent node."""
         try:
-            state = await self.fraud_detector.analyze(state)
-            logger.info(f"✅ Fraud Detection Agent completed for file: {state['file_id']}")
+            logger.info("Starting fraud detection agent")
+            state["current_step"] = "Detecting potential fraud"
+            state["progress_percentage"] = 80.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for fraud detection")
+                return state
+                
+            # Run fraud detector
+            await self.fraud_detector.analyze(state)
+            state["progress_percentage"] = 85.0
+            
+            logger.info("Fraud detection agent completed")
+            
         except Exception as e:
-            logger.error(f"❌ Fraud Detection Agent failed for file {state['file_id']}: {str(e)}")
+            logger.error(f"Fraud detection agent failed: {str(e)}")
             state["error_message"] = f"Fraud detection failed: {str(e)}"
-            state["failed_step"] = "fraud_detection"
             
         return state
-
-    async def legal_advisor_agent(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """
-        ⚖️ Agent 4: Legal Advisor Agent
-        Uses the organized LegalAdvisorAgent class.
-        """
-        logger.info(f"⚖️ Legal Advisor Agent starting for file: {state['file_id']}")
         
+    async def legal_advisor_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Legal advisor agent node."""
         try:
-            state = await self.legal_advisor.analyze(state)
-            logger.info(f"✅ Legal Advisor Agent completed for file: {state['file_id']}")
+            logger.info("Starting legal advisor agent")
+            state["current_step"] = "Providing legal analysis"
+            state["progress_percentage"] = 90.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for legal advisor")
+                return state
+                
+            # Run legal advisor
+            await self.legal_advisor.analyze(state)
+            state["progress_percentage"] = 95.0
+            
+            logger.info("Legal advisor agent completed")
+            
         except Exception as e:
-            logger.error(f"❌ Legal Advisor Agent failed for file {state['file_id']}: {str(e)}")
-            state["error_message"] = f"Legal analysis failed: {str(e)}"
-            state["failed_step"] = "legal_analysis"
+            logger.error(f"Legal advisor agent failed: {str(e)}")
+            state["error_message"] = f"Legal advisor failed: {str(e)}"
             
         return state
-
-    async def action_planner_agent(self, state: DocumentAnalysisState) -> DocumentAnalysisState:
-        """
-        📝 Agent 5: Action Planner Agent
-        Uses the organized ActionPlannerAgent class and creates final summary.
-        """
-        logger.info(f"📝 Action Planner Agent starting for file: {state['file_id']}")
         
+    async def action_planner_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Action planner agent node."""
         try:
-            # Run action planner analysis
-            state = await self.action_planner.analyze(state)
+            logger.info("Starting action planner agent")
+            state["current_step"] = "Creating action plan"
+            state["progress_percentage"] = 95.0
             
-            # Create final summary combining all results
-            self._create_final_summary(state)
-            
-            # Mark workflow as completed
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for action planner")
+                return state
+                
+            # Run action planner
+            await self.action_planner.analyze(state)
             state["current_step"] = "Analysis completed"
             state["progress_percentage"] = 100.0
             
-            from datetime import datetime, timezone
-            state["completed_at"] = datetime.now(timezone.utc).isoformat()
-            
-            logger.info(f"✅ Action Planner Agent completed for file: {state['file_id']}")
+            logger.info("Action planner agent completed")
             
         except Exception as e:
-            logger.error(f"❌ Action Planner Agent failed for file {state['file_id']}: {str(e)}")
-            state["error_message"] = f"Action planning failed: {str(e)}"
-            state["failed_step"] = "action_planning"
+            logger.error(f"Action planner agent failed: {str(e)}")
+            state["error_message"] = f"Action planner failed: {str(e)}"
             
-            # Create fallback summary even if action planner fails
-            self._create_fallback_summary(state)
+        return state
+
+    async def text_extraction_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Text extraction node for workflow compatibility."""
+        await self.extract_text_content(state)
+        return state
+        
+    async def document_summarizer_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Document summarizer agent node."""
+        try:
+            logger.info("Starting document summarizer agent")
+            state["current_step"] = "Analyzing document content"
+            state["progress_percentage"] = 40.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for document summarizer")
+                return state
+                
+            # Run document summarizer
+            await self.document_summarizer.analyze(state)
+            state["progress_percentage"] = 50.0
+            
+            logger.info("Document summarizer agent completed")
+            
+        except Exception as e:
+            logger.error(f"Document summarizer agent failed: {str(e)}")
+            state["error_message"] = f"Document summarizer failed: {str(e)}"
+            
+        return state
+        
+    async def risk_assessment_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Risk assessment agent node."""
+        try:
+            logger.info("Starting risk assessment agent")
+            state["current_step"] = "Assessing legal risks"
+            state["progress_percentage"] = 60.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for risk assessment")
+                return state
+                
+            # Run risk assessor
+            await self.risk_assessor.analyze(state)
+            state["progress_percentage"] = 70.0
+            
+            logger.info("Risk assessment agent completed")
+            
+        except Exception as e:
+            logger.error(f"Risk assessment agent failed: {str(e)}")
+            state["error_message"] = f"Risk assessment failed: {str(e)}"
+            
+        return state
+        
+    async def fraud_detection_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Fraud detection agent node."""
+        try:
+            logger.info("Starting fraud detection agent")
+            state["current_step"] = "Detecting potential fraud"
+            state["progress_percentage"] = 80.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for fraud detection")
+                return state
+                
+            # Run fraud detector
+            await self.fraud_detector.analyze(state)
+            state["progress_percentage"] = 85.0
+            
+            logger.info("Fraud detection agent completed")
+            
+        except Exception as e:
+            logger.error(f"Fraud detection agent failed: {str(e)}")
+            state["error_message"] = f"Fraud detection failed: {str(e)}"
+            
+        return state
+        
+    async def legal_advisor_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Legal advisor agent node."""
+        try:
+            logger.info("Starting legal advisor agent")
+            state["current_step"] = "Providing legal analysis"
+            state["progress_percentage"] = 90.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for legal advisor")
+                return state
+                
+            # Run legal advisor
+            await self.legal_advisor.analyze(state)
+            state["progress_percentage"] = 95.0
+            
+            logger.info("Legal advisor agent completed")
+            
+        except Exception as e:
+            logger.error(f"Legal advisor agent failed: {str(e)}")
+            state["error_message"] = f"Legal advisor failed: {str(e)}"
+            
+        return state
+        
+    async def action_planner_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Action planner agent node."""
+        try:
+            logger.info("Starting action planner agent")
+            state["current_step"] = "Creating action plan"
+            state["progress_percentage"] = 95.0
+            
+            if not state.get("extracted_text"):
+                logger.error("No extracted text available for action planner")
+                return state
+                
+            # Run action planner
+            await self.action_planner.analyze(state)
+            state["current_step"] = "Analysis completed"
+            state["progress_percentage"] = 100.0
+            
+            logger.info("Action planner agent completed")
+            
+        except Exception as e:
+            logger.error(f"Action planner agent failed: {str(e)}")
+            state["error_message"] = f"Action planner failed: {str(e)}"
             
         return state
 
