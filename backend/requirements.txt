@@ -25,6 +25,7 @@ tiktoken>=0.5.0
 langgraph>=0.0.60
 langchain>=0.1.0
 langchain-openai>=0.1.0
+langfuse>=2.0.0
 
 # Background processing
 celery>=5.3.0

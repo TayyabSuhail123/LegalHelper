@@ -13,6 +13,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 from app.core.multi_agent_system import LegalAnalysisAgents
 from app.services.file_processing import FileProcessingService
+from app.core.langfuse_integration import trace_workflow, log_workflow_event
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class DocumentAnalysisWorkflow:
         memory = MemorySaver()
         return workflow.compile(checkpointer=memory)
     
+    @trace_workflow("legal_document_analysis")
     async def process_document(
         self, 
         file_id: str, 
@@ -146,6 +148,16 @@ class DocumentAnalysisWorkflow:
         
         logger.info(f"Starting document analysis workflow for file: {file_id}")
         
+        # Log workflow start
+        log_workflow_event("workflow_started", {
+            "file_id": file_id,
+            "filename": filename,
+            "file_type": file_type,
+            "file_size": len(file_content),
+            "agents": ["text_extraction", "document_summarizer", "risk_assessor", 
+                      "fraud_detector", "legal_advisor", "action_planner"]
+        })
+        
         try:
             # Run the workflow
             config = {"configurable": {"thread_id": file_id}}
@@ -157,11 +169,26 @@ class DocumentAnalysisWorkflow:
             processing_time = time.time() - start_time
             final_state["processing_time"] = processing_time
             
+            # Log successful completion
+            log_workflow_event("workflow_completed", {
+                "file_id": file_id,
+                "processing_time": processing_time,
+                "status": "success",
+                "agents_executed": 6
+            })
+            
             logger.info(f"Document analysis completed for file: {file_id} in {processing_time:.2f}s")
             
             return final_state
             
         except Exception as e:
+            # Log error in LangFuse
+            log_workflow_event("workflow_failed", {
+                "file_id": file_id,
+                "error": str(e),
+                "processing_time": time.time() - start_time
+            })
+            
             logger.error(f"Document analysis workflow failed for file {file_id}: {str(e)}")
             
             # Return error state

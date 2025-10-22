@@ -13,6 +13,7 @@ from app.agents.risk_assessor import RiskAssessorAgent
 from app.agents.fraud_detector import FraudDetectorAgent
 from app.agents.legal_advisor import LegalAdvisorAgent
 from app.agents.action_planner import ActionPlannerAgent
+from app.core.langfuse_integration import trace_agent, log_workflow_event
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +82,13 @@ class LegalAnalysisAgents:
             raise
 
     # Workflow compatibility methods
+    @trace_agent("text_extraction")
     async def text_extraction_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Text extraction node for workflow compatibility."""
         await self.extract_text_content(state)
         return state
         
+    @trace_agent("document_summarizer")
     async def document_summarizer_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Document summarizer agent node."""
         try:
@@ -109,6 +112,7 @@ class LegalAnalysisAgents:
             
         return state
         
+    @trace_agent("risk_assessment")
     async def risk_assessment_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Risk assessment agent node."""
         try:
@@ -132,6 +136,7 @@ class LegalAnalysisAgents:
             
         return state
         
+    @trace_agent("fraud_detection")
     async def fraud_detection_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Fraud detection agent node."""
         try:
@@ -155,6 +160,7 @@ class LegalAnalysisAgents:
             
         return state
         
+    @trace_agent("legal_advisor")
     async def legal_advisor_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Legal advisor agent node."""
         try:
@@ -178,127 +184,7 @@ class LegalAnalysisAgents:
             
         return state
         
-    async def action_planner_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Action planner agent node."""
-        try:
-            logger.info("Starting action planner agent")
-            state["current_step"] = "Creating action plan"
-            state["progress_percentage"] = 95.0
-            
-            if not state.get("extracted_text"):
-                logger.error("No extracted text available for action planner")
-                return state
-                
-            # Run action planner
-            await self.action_planner.analyze(state)
-            state["current_step"] = "Analysis completed"
-            state["progress_percentage"] = 100.0
-            
-            logger.info("Action planner agent completed")
-            
-        except Exception as e:
-            logger.error(f"Action planner agent failed: {str(e)}")
-            state["error_message"] = f"Action planner failed: {str(e)}"
-            
-        return state
-
-    async def text_extraction_node(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Text extraction node for workflow compatibility."""
-        await self.extract_text_content(state)
-        return state
-        
-    async def document_summarizer_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Document summarizer agent node."""
-        try:
-            logger.info("Starting document summarizer agent")
-            state["current_step"] = "Analyzing document content"
-            state["progress_percentage"] = 40.0
-            
-            if not state.get("extracted_text"):
-                logger.error("No extracted text available for document summarizer")
-                return state
-                
-            # Run document summarizer
-            await self.document_summarizer.analyze(state)
-            state["progress_percentage"] = 50.0
-            
-            logger.info("Document summarizer agent completed")
-            
-        except Exception as e:
-            logger.error(f"Document summarizer agent failed: {str(e)}")
-            state["error_message"] = f"Document summarizer failed: {str(e)}"
-            
-        return state
-        
-    async def risk_assessment_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Risk assessment agent node."""
-        try:
-            logger.info("Starting risk assessment agent")
-            state["current_step"] = "Assessing legal risks"
-            state["progress_percentage"] = 60.0
-            
-            if not state.get("extracted_text"):
-                logger.error("No extracted text available for risk assessment")
-                return state
-                
-            # Run risk assessor
-            await self.risk_assessor.analyze(state)
-            state["progress_percentage"] = 70.0
-            
-            logger.info("Risk assessment agent completed")
-            
-        except Exception as e:
-            logger.error(f"Risk assessment agent failed: {str(e)}")
-            state["error_message"] = f"Risk assessment failed: {str(e)}"
-            
-        return state
-        
-    async def fraud_detection_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Fraud detection agent node."""
-        try:
-            logger.info("Starting fraud detection agent")
-            state["current_step"] = "Detecting potential fraud"
-            state["progress_percentage"] = 80.0
-            
-            if not state.get("extracted_text"):
-                logger.error("No extracted text available for fraud detection")
-                return state
-                
-            # Run fraud detector
-            await self.fraud_detector.analyze(state)
-            state["progress_percentage"] = 85.0
-            
-            logger.info("Fraud detection agent completed")
-            
-        except Exception as e:
-            logger.error(f"Fraud detection agent failed: {str(e)}")
-            state["error_message"] = f"Fraud detection failed: {str(e)}"
-            
-        return state
-        
-    async def legal_advisor_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Legal advisor agent node."""
-        try:
-            logger.info("Starting legal advisor agent")
-            state["current_step"] = "Providing legal analysis"
-            state["progress_percentage"] = 90.0
-            
-            if not state.get("extracted_text"):
-                logger.error("No extracted text available for legal advisor")
-                return state
-                
-            # Run legal advisor
-            await self.legal_advisor.analyze(state)
-            state["progress_percentage"] = 95.0
-            
-            logger.info("Legal advisor agent completed")
-            
-        except Exception as e:
-            logger.error(f"Legal advisor agent failed: {str(e)}")
-            state["error_message"] = f"Legal advisor failed: {str(e)}"
-            
-        return state
-        
+    @trace_agent("action_planner")
     async def action_planner_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Action planner agent node."""
         try:
