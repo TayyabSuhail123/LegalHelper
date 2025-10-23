@@ -6,13 +6,13 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAnalysisAgent
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
 
-class LegalAdvisorAgent(BaseAgent):
+class LegalAdvisorAgent(BaseAnalysisAgent):
     """
     Specialized agent for providing legal advice and implications.
     
@@ -41,181 +41,100 @@ class LegalAdvisorAgent(BaseAgent):
             state: Current analysis state
             
         Returns:
-            Updated state with legal advice
+            Updated state with legal analysis results
         """
-        logger.info(f"LegalAdvisorAgent: Starting analysis for file {state['file_id']}")
-        
-        try:
-            state["current_step"] = "Analyzing legal implications"
-            state["progress_percentage"] = 70.0
-            
-            if not self._validate_document_text(state):
-                return self._update_state_with_error(
-                    state, 
-                    "No document text available for legal analysis", 
-                    "legal_advisor"
-                )
-            
-            document_text = state["extracted_text"]
-            
-            # Load prompt and call LLM
-            prompt = self._load_prompt()
-            llm_response = await self._call_llm(prompt, document_text)
-            
-            if llm_response:
-                try:
-                    # Parse JSON response
-                    result = json.loads(llm_response)
-                    
-                    # Update state with AI results
-                    state["legal_implications"] = result.get("legal_implications", [])
-                    state["rights_obligations"] = result.get("rights_obligations", {})
-                    state["compliance_issues"] = result.get("compliance_issues", [])
-                    state["legal_advice"] = result.get("legal_advice", [])
-                    
-                    logger.info(f"LegalAdvisorAgent: AI analysis completed for file {state['file_id']}")
-                    
-                except json.JSONDecodeError as e:
-                    logger.warning(f"LegalAdvisorAgent: Failed to parse AI response, using fallback: {e}")
-                    self._fallback_analysis(state, document_text)
-            else:
-                logger.warning("LegalAdvisorAgent: No AI response, using fallback analysis")
-                self._fallback_analysis(state, document_text)
-            
-            state["progress_percentage"] = 80.0
-            logger.info(f"LegalAdvisorAgent: Analysis completed for file {state['file_id']}")
-            
-        except Exception as e:
-            return self._update_state_with_error(
-                state, 
-                f"Legal analysis failed: {str(e)}", 
-                "legal_advisor"
-            )
-        
+        return await self._analyze_with_llm(state, "legal analysis", 80.0)
+    
+    def _update_state_with_results(self, state: DocumentAnalysisState, results: Dict[str, Any]) -> DocumentAnalysisState:
+        """Update state with legal analysis results."""
+        state["legal_implications"] = results.get("legal_implications", [])
+        state["rights_obligations"] = results.get("rights_obligations", [])
+        state["compliance_issues"] = results.get("compliance_issues", [])
+        state["legal_advice"] = results.get("legal_advice", [])
         return state
     
-    def _fallback_analysis(self, state: DocumentAnalysisState, document_text: str) -> None:
-        """
-        Fallback legal analysis when AI is not available.
+    def _get_fallback_results(self, document_text: str) -> Dict[str, Any]:
+        """Provide basic legal analysis when LLM fails."""
+        text_lower = document_text.lower()
         
-        Args:
-            state: Current analysis state
-            document_text: Text to analyze
-        """
-        text = document_text.lower()
         legal_implications = []
-        rights_obligations = {"your_rights": [], "your_obligations": [], "other_party_rights": [], "other_party_obligations": []}
+        rights_obligations = []
         compliance_issues = []
         legal_advice = []
         
-        # Common legal terms and their implications
-        legal_patterns = {
-            "liquidated damages": {
-                "implication": "You may be required to pay predetermined damages for breach",
-                "advice": "Ensure damage amounts are reasonable and enforceable"
-            },
-            "indemnification": {
-                "implication": "You may be responsible for defending/paying claims against the other party",
-                "advice": "Review indemnification scope carefully - it can be very costly"
-            },
-            "force majeure": {
-                "implication": "Contract performance may be excused during extraordinary circumstances",
-                "advice": "Understand what events are covered and notification requirements"
-            },
-            "governing law": {
-                "implication": "Disputes will be resolved under specific state/country laws",
-                "advice": "Consider if the governing law is favorable to your situation"
-            },
-            "arbitration": {
-                "implication": "Disputes must be resolved through arbitration, not court",
-                "advice": "You may waive your right to jury trial and class action suits"
-            },
-            "non-disclosure": {
-                "implication": "You are legally bound to keep certain information confidential",
-                "advice": "Understand what information is confidential and time limits"
-            },
-            "non-compete": {
-                "implication": "You may be restricted from competing with the other party",
-                "advice": "Ensure restrictions are reasonable in scope, time, and geography"
-            }
+        # Check for key legal terms
+        legal_terms = {
+            "liability": "Document contains liability provisions that may limit your rights",
+            "warranty": "Warranty terms that affect product guarantees and remedies",
+            "termination": "Termination clauses that specify when agreement ends",
+            "jurisdiction": "Legal jurisdiction and governing law considerations",
+            "arbitration": "Dispute resolution through arbitration rather than courts",
+            "indemnification": "Indemnification clauses that may require you to cover costs",
+            "intellectual property": "Intellectual property rights and restrictions",
+            "confidentiality": "Confidentiality obligations that restrict information sharing"
         }
         
-        for pattern, info in legal_patterns.items():
-            if pattern in text:
-                legal_implications.append(info["implication"])
-                legal_advice.append(f"{pattern.title()}: {info['advice']}")
+        for term, implication in legal_terms.items():
+            if term in text_lower:
+                legal_implications.append({
+                    "term": term,
+                    "implication": implication,
+                    "severity": "medium"
+                })
         
-        # Check for termination clauses
-        termination_terms = ["terminate", "termination", "end this agreement", "cancel"]
-        if any(term in text for term in termination_terms):
-            legal_implications.append("Contract contains termination provisions")
-            legal_advice.append("Review termination procedures and notice requirements carefully")
+        # Check for rights and obligations
+        obligation_keywords = ["must", "shall", "required", "obligation", "duty", "liable"]
+        rights_keywords = ["may", "entitled", "right", "privilege", "authorized"]
         
-        # Check for payment obligations
-        payment_terms = ["payment", "pay", "fee", "cost", "charge", "invoice"]
-        if any(term in text for term in payment_terms):
-            rights_obligations["your_obligations"].append("Payment obligations specified in document")
-            legal_advice.append("Ensure you understand all payment terms and due dates")
+        lines = document_text.split('.')
+        for line in lines[:20]:  # Check first 20 sentences
+            line_lower = line.lower().strip()
+            if any(keyword in line_lower for keyword in obligation_keywords):
+                if len(line.strip()) > 20:  # Meaningful sentence
+                    rights_obligations.append({
+                        "type": "obligation",
+                        "description": line.strip()[:200],  # Limit length
+                        "importance": "medium"
+                    })
+            elif any(keyword in line_lower for keyword in rights_keywords):
+                if len(line.strip()) > 20:  # Meaningful sentence
+                    rights_obligations.append({
+                        "type": "right",
+                        "description": line.strip()[:200],  # Limit length
+                        "importance": "medium"
+                    })
         
-        # Check for warranty disclaimers
-        warranty_terms = ["warranty", "guarantee", "as is", "without warranty"]
-        if any(term in text for term in warranty_terms):
-            legal_implications.append("Document contains warranty provisions or disclaimers")
-            legal_advice.append("Understand what warranties are provided or disclaimed")
+        # Check for compliance issues
+        compliance_keywords = ["regulation", "compliance", "law", "statute", "code", "requirement"]
+        for keyword in compliance_keywords:
+            if keyword in text_lower:
+                compliance_issues.append({
+                    "area": keyword,
+                    "description": f"Document references {keyword} - review for compliance requirements",
+                    "priority": "medium"
+                })
         
-        # Check for limitation of liability
-        liability_terms = ["limitation of liability", "limit liability", "not liable", "exclude liability"]
-        if any(term in text for term in liability_terms):
-            legal_implications.append("Liability may be limited or excluded")
-            legal_advice.append("Consider whether liability limitations are acceptable for your situation")
+        # Provide basic legal advice
+        legal_advice = [
+            "Review all terms carefully before signing or agreeing",
+            "Consider consulting with a qualified attorney for complex agreements",
+            "Pay special attention to liability, termination, and dispute resolution clauses",
+            "Ensure you understand all rights and obligations before proceeding"
+        ]
         
-        # Check for intellectual property clauses
-        ip_terms = ["intellectual property", "copyright", "trademark", "patent", "trade secret"]
-        if any(term in text for term in ip_terms):
-            legal_implications.append("Intellectual property rights are addressed")
-            legal_advice.append("Understand who owns what intellectual property and usage rights")
+        # Add specific advice based on detected terms
+        if "arbitration" in text_lower:
+            legal_advice.append("This document includes arbitration clauses - understand your dispute resolution options")
         
-        # Check for compliance requirements
-        compliance_terms = ["comply", "compliance", "regulation", "law", "legal requirement"]
-        if any(term in text for term in compliance_terms):
-            compliance_issues.append("Document references compliance obligations")
-            legal_advice.append("Ensure you can meet all compliance requirements mentioned")
+        if "liability" in text_lower:
+            legal_advice.append("Review liability limitations carefully - they may restrict your remedies")
         
-        # Check for duration and renewal
-        duration_terms = ["term", "duration", "expire", "renew", "renewal"]
-        if any(term in text for term in duration_terms):
-            legal_implications.append("Contract has specific duration and renewal terms")
-            legal_advice.append("Note contract duration and any automatic renewal provisions")
+        if "termination" in text_lower:
+            legal_advice.append("Check termination procedures and notice requirements")
         
-        # General rights based on document type
-        if "employment" in text or "employee" in text:
-            rights_obligations["your_rights"].append("Employment rights as defined by law")
-            legal_advice.append("Review employment terms against local labor laws")
-        
-        if "lease" in text or "rent" in text:
-            rights_obligations["your_rights"].append("Tenant rights under applicable landlord-tenant law")
-            legal_advice.append("Understand your rights and obligations as a tenant")
-        
-        if "purchase" in text or "sale" in text:
-            rights_obligations["your_rights"].append("Consumer protection rights may apply")
-            legal_advice.append("Review return policies and warranty protections")
-        
-        # Default analysis if no specific terms found
-        if not legal_implications:
-            legal_implications.append("Document creates legal obligations that should be carefully reviewed")
-            legal_advice.append("Consider having this document reviewed by a qualified attorney")
-        
-        # Add general legal advice
-        legal_advice.extend([
-            "Keep a signed copy of this document for your records",
-            "If you don't understand any terms, seek legal counsel before signing",
-            "Consider the long-term implications of all obligations you're undertaking"
-        ])
-        
-        # Update state
-        state["legal_implications"] = legal_implications
-        state["rights_obligations"] = rights_obligations
-        state["compliance_issues"] = compliance_issues
-        state["legal_advice"] = legal_advice
-        
-        logger.info(f"LegalAdvisorAgent: Fallback analysis completed with {len(legal_implications)} implications")
+        return {
+            "legal_implications": legal_implications[:10],  # Limit to 10 items
+            "rights_obligations": rights_obligations[:15],  # Limit to 15 items
+            "compliance_issues": compliance_issues[:10],  # Limit to 10 items
+            "legal_advice": legal_advice[:10]  # Limit to 10 items
+        }

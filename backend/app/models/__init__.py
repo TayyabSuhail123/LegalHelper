@@ -1,5 +1,17 @@
 """Models module initialization."""
 
-from .responses import HealthResponse, ErrorResponse, SuccessResponse
+from .file_processing import (
+    DocumentFile,
+    DocumentAnalysis,
+    FileType,
+    ProcessingStatus,
+    RiskLevel,
+)
 
-__all__ = ["HealthResponse", "ErrorResponse", "SuccessResponse"]
+__all__ = [
+    "DocumentFile",
+    "DocumentAnalysis", 
+    "FileType",
+    "ProcessingStatus",
+    "RiskLevel",
+]

@@ -2,17 +2,16 @@
 Risk Assessor Agent - Identifies legal risks and potential liabilities.
 """
 
-import json
 import logging
 from typing import Dict, Any, List
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAnalysisAgent
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
 
-class RiskAssessorAgent(BaseAgent):
+class RiskAssessorAgent(BaseAnalysisAgent):
     """
     Specialized agent for identifying legal risks and liabilities.
     
@@ -43,143 +42,80 @@ class RiskAssessorAgent(BaseAgent):
         Returns:
             Updated state with risk assessment
         """
-        logger.info(f"RiskAssessorAgent: Starting analysis for file {state['file_id']}")
-        
-        try:
-            state["current_step"] = "Assessing legal risks"
-            state["progress_percentage"] = 50.0
-            
-            if not self._validate_document_text(state):
-                return self._update_state_with_error(
-                    state, 
-                    "No document text available for risk assessment", 
-                    "risk_assessor"
-                )
-            
-            document_text = state["extracted_text"]
-            
-            # Load prompt and call LLM
-            prompt = self._load_prompt()
-            llm_response = await self._call_llm(prompt, document_text)
-            
-            if llm_response:
-                try:
-                    # Parse JSON response
-                    result = json.loads(llm_response)
-                    
-                    # Update state with AI results
-                    state["legal_risks"] = result.get("legal_risks", [])
-                    state["potential_liabilities"] = result.get("potential_liabilities", [])
-                    state["overall_risk_score"] = min(result.get("overall_risk_score", 5.0), 10.0)
-                    state["overall_risk_level"] = result.get("overall_risk_level", "MEDIUM")
-                    
-                    logger.info(f"RiskAssessorAgent: AI analysis completed for file {state['file_id']}")
-                    
-                except json.JSONDecodeError as e:
-                    logger.warning(f"RiskAssessorAgent: Failed to parse AI response, using fallback: {e}")
-                    self._fallback_analysis(state, document_text)
-            else:
-                logger.warning("RiskAssessorAgent: No AI response, using fallback analysis")
-                self._fallback_analysis(state, document_text)
-            
-            state["progress_percentage"] = 70.0
-            logger.info(f"RiskAssessorAgent: Analysis completed for file {state['file_id']}")
-            
-        except Exception as e:
-            return self._update_state_with_error(
-                state, 
-                f"Risk assessment failed: {str(e)}", 
-                "risk_assessor"
-            )
-        
+        return await self._analyze_with_llm(state, "risk assessment", 50.0)
+    
+    def _update_state_with_results(self, state: DocumentAnalysisState, results: Dict[str, Any]) -> DocumentAnalysisState:
+        """Update state with risk assessment results."""
+        state["legal_risks"] = results.get("legal_risks", [])
+        state["potential_liabilities"] = results.get("potential_liabilities", [])
+        state["overall_risk_score"] = min(results.get("overall_risk_score", 5.0), 10.0)
+        state["overall_risk_level"] = results.get("overall_risk_level", "MEDIUM")
         return state
     
-    def _fallback_analysis(self, state: DocumentAnalysisState, document_text: str) -> None:
-        """
-        Fallback risk analysis when AI is not available.
+    def _get_fallback_results(self, document_text: str) -> Dict[str, Any]:
+        """Provide basic risk analysis when LLM fails."""
+        text_lower = document_text.lower()
         
-        Args:
-            state: Current analysis state
-            document_text: Text to analyze
-        """
-        text = document_text.lower()
-        risks = []
-        total_risk_score = 0.0
-        
-        # High-risk terms and their risk scores
-        high_risk_terms = {
-            "unlimited liability": {"category": "legal", "severity": "CRITICAL", "score": 8.0},
-            "automatic renewal": {"category": "operational", "severity": "HIGH", "score": 6.0},
-            "penalty": {"category": "financial", "severity": "HIGH", "score": 7.0},
-            "liquidated damages": {"category": "financial", "severity": "HIGH", "score": 6.5},
-            "no limitation": {"category": "legal", "severity": "CRITICAL", "score": 9.0},
-            "immediate termination": {"category": "operational", "severity": "MEDIUM", "score": 5.0},
-            "indemnify": {"category": "legal", "severity": "HIGH", "score": 7.5},
-            "hold harmless": {"category": "legal", "severity": "HIGH", "score": 7.0},
-            "waive": {"category": "legal", "severity": "MEDIUM", "score": 4.5},
-        }
-        
-        # Check for high-risk terms
-        for term, risk_info in high_risk_terms.items():
-            if term in text:
-                risk = {
-                    "category": risk_info["category"],
-                    "severity": risk_info["severity"],
-                    "description": f"Document contains '{term}' clause which may create {risk_info['severity'].lower()} risk",
-                    "recommendation": f"Carefully review the '{term}' clause with legal counsel"
-                }
-                risks.append(risk)
-                total_risk_score += risk_info["score"]
-        
-        # Check for specific risky patterns
-        risky_patterns = [
-            ("payment", "financial", "MEDIUM", 3.0, "payment obligations"),
-            ("fee", "financial", "MEDIUM", 2.5, "additional fees"),
-            ("breach", "legal", "HIGH", 5.5, "breach consequences"),
-            ("default", "legal", "HIGH", 5.0, "default provisions"),
-            ("force majeure", "operational", "LOW", 2.0, "force majeure clauses"),
+        # Basic risk indicators
+        high_risk_keywords = [
+            "penalty", "fine", "liquidated damages", "termination without cause",
+            "indemnification", "liability", "unlimited liability", "personal guarantee"
         ]
         
-        for pattern, category, severity, score, description in risky_patterns:
-            if pattern in text and not any(r["description"].startswith(f"Document contains '{pattern}'") for r in risks):
-                risk = {
-                    "category": category,
-                    "severity": severity, 
-                    "description": f"Document contains {description} that should be reviewed",
-                    "recommendation": f"Review {description} carefully"
-                }
-                risks.append(risk)
-                total_risk_score += score
+        medium_risk_keywords = [
+            "breach", "default", "suspension", "confidentiality", "non-compete",
+            "exclusive", "irrevocable", "waiver", "limitation of liability"
+        ]
         
-        # Add default risk if none found
-        if not risks:
-            risk = {
-                "category": "general",
-                "severity": "LOW",
-                "description": "Standard legal document - no obvious high-risk terms detected",
-                "recommendation": "Standard legal review recommended before signing"
-            }
-            risks.append(risk)
-            total_risk_score = 2.0
+        # Count risk indicators
+        high_risk_count = sum(1 for keyword in high_risk_keywords if keyword in text_lower)
+        medium_risk_count = sum(1 for keyword in medium_risk_keywords if keyword in text_lower)
         
-        # Determine overall risk level
-        if total_risk_score >= 15:
-            overall_risk_level = "CRITICAL"
-        elif total_risk_score >= 10:
-            overall_risk_level = "HIGH"
-        elif total_risk_score >= 5:
-            overall_risk_level = "MEDIUM"
+        # Calculate risk score and level
+        risk_score = min(high_risk_count * 2 + medium_risk_count * 1, 10)
+        
+        if risk_score >= 8:
+            risk_level = "HIGH"
+        elif risk_score >= 5:
+            risk_level = "MEDIUM"
         else:
-            overall_risk_level = "LOW"
+            risk_level = "LOW"
         
-        # Update state
-        state["legal_risks"] = risks
-        state["potential_liabilities"] = [
-            "Legal obligations as specified in the document",
-            "Financial responsibilities outlined in terms",
-            "Compliance requirements mentioned"
-        ]
-        state["overall_risk_score"] = min(total_risk_score, 10.0)
-        state["overall_risk_level"] = overall_risk_level
+        # Generate basic risk list
+        legal_risks = []
+        if "penalty" in text_lower or "fine" in text_lower:
+            legal_risks.append({
+                "category": "FINANCIAL",
+                "level": "HIGH",
+                "description": "Document contains penalty or fine provisions"
+            })
         
-        logger.info(f"RiskAssessorAgent: Fallback analysis completed - Risk Level: {overall_risk_level}")
+        if "liability" in text_lower:
+            legal_risks.append({
+                "category": "LIABILITY", 
+                "level": "MEDIUM",
+                "description": "Document contains liability provisions"
+            })
+            
+        if "termination" in text_lower:
+            legal_risks.append({
+                "category": "OPERATIONAL",
+                "level": "MEDIUM", 
+                "description": "Document contains termination clauses"
+            })
+        
+        # Basic liability assessment
+        potential_liabilities = []
+        if "indemnif" in text_lower:
+            potential_liabilities.append("Indemnification obligations")
+        if "breach" in text_lower:
+            potential_liabilities.append("Potential breach consequences")
+        if "damage" in text_lower:
+            potential_liabilities.append("Damage-related liabilities")
+        
+        return {
+            "legal_risks": legal_risks,
+            "potential_liabilities": potential_liabilities,
+            "overall_risk_score": risk_score,
+            "overall_risk_level": risk_level
+        }

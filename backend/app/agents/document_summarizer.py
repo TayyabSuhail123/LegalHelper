@@ -2,17 +2,16 @@
 Document Summarizer Agent - Provides clear summaries of legal documents.
 """
 
-import json
 import logging
 from typing import Dict, Any
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAnalysisAgent
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentSummarizerAgent(BaseAgent):
+class DocumentSummarizerAgent(BaseAnalysisAgent):
     """
     Specialized agent for creating clear, accessible summaries of legal documents.
     
@@ -43,134 +42,71 @@ class DocumentSummarizerAgent(BaseAgent):
         Returns:
             Updated state with summary information
         """
-        logger.info(f"DocumentSummarizerAgent: Starting analysis for file {state['file_id']}")
+        return await self._analyze_with_llm(state, "document summarization", 20.0)
+    
+    def _update_state_with_results(self, state: DocumentAnalysisState, results: Dict[str, Any]) -> DocumentAnalysisState:
+        """Update state with document summarizer results."""
+        # Update state with AI results
+        state["document_summary"] = results.get("document_summary", "")
+        state["document_purpose"] = results.get("document_purpose", "")
+        state["key_parties"] = results.get("key_parties", [])
+        state["important_dates"] = results.get("important_dates", [])
         
-        try:
-            state["current_step"] = "Creating document summary"
-            state["progress_percentage"] = 20.0
-            
-            if not self._validate_document_text(state):
-                return self._update_state_with_error(
-                    state, 
-                    "No document text available for summarization", 
-                    "document_summarizer"
-                )
-            
-            document_text = state["extracted_text"]
-            
-            # Load prompt and call LLM
-            prompt = self._load_prompt()
-            # Try AI analysis first
-            ai_response = await self._call_llm(prompt, document_text)
-            
-            if ai_response:
-                try:
-                    # Parse JSON response
-                    result = json.loads(ai_response)
-                    
-                    # Update state with AI results
-                    state["document_summary"] = result.get("document_summary", "")
-                    state["document_purpose"] = result.get("document_purpose", "")
-                    state["key_parties"] = result.get("key_parties", [])
-                    state["important_dates"] = result.get("important_dates", [])
-                    
-                    # Extract document type for classification (for compatibility)
-                    doc_summary = result.get("document_summary", "").lower()
-                    if any(word in doc_summary for word in ["contract", "agreement", "terms"]):
-                        state["document_type"] = "contract"
-                    elif any(word in doc_summary for word in ["lease", "rental"]):
-                        state["document_type"] = "lease"
-                    elif any(word in doc_summary for word in ["employment", "job", "work"]):
-                        state["document_type"] = "employment"
-                    elif any(word in doc_summary for word in ["nda", "confidential", "non-disclosure"]):
-                        state["document_type"] = "nda"
-                    else:
-                        state["document_type"] = "legal_document"
-                    
-                    state["confidence_score"] = 0.85  # AI analysis confidence
-                    
-                    logger.info(f"DocumentSummarizerAgent: AI analysis completed for file {state['file_id']}")
-                    
-                except json.JSONDecodeError as e:
-                    logger.warning(f"DocumentSummarizerAgent: Failed to parse AI response, using fallback: {e}")
-                    self._fallback_analysis(state, document_text)
-            else:
-                logger.warning("DocumentSummarizerAgent: No AI response, using fallback analysis")
-                self._fallback_analysis(state, document_text)
-            
-            state["progress_percentage"] = 40.0
-            logger.info(f"DocumentSummarizerAgent: Analysis completed for file {state['file_id']}")
-            
-        except Exception as e:
-            return self._update_state_with_error(
-                state, 
-                f"Analysis failed: {str(e)}", 
-                "document_summarizer"
-            )
+        # Extract document type for classification (for compatibility)
+        doc_summary = results.get("document_summary", "").lower()
+        if any(word in doc_summary for word in ["contract", "agreement", "terms"]):
+            state["document_type"] = "contract"
+        elif any(word in doc_summary for word in ["lease", "rental"]):
+            state["document_type"] = "lease"
+        elif any(word in doc_summary for word in ["employment", "job", "work"]):
+            state["document_type"] = "employment"
+        elif any(word in doc_summary for word in ["nda", "confidential", "non-disclosure"]):
+            state["document_type"] = "nda"
+        else:
+            state["document_type"] = "legal_document"
+        
+        state["confidence_score"] = 0.85  # AI analysis confidence
         
         return state
     
-    def _fallback_analysis(self, state: DocumentAnalysisState, document_text: str) -> None:
-        """
-        Fallback analysis when AI is not available.
+    def _get_fallback_results(self, document_text: str) -> Dict[str, Any]:
+        """Provide basic rule-based analysis when LLM fails."""
+        # Basic text analysis without AI
+        text_lower = document_text.lower()
         
-        Args:
-            state: Current analysis state
-            document_text: Text to analyze
-        """
-        text = document_text.lower()
-        
-        # Basic document type detection
-        if any(word in text for word in ["contract", "agreement", "terms"]):
-            doc_type = "legal agreement"
-            doc_type_key = "contract"
-        elif "lease" in text:
-            doc_type = "lease agreement"
-            doc_type_key = "lease"
-        elif "employment" in text:
-            doc_type = "employment document"
-            doc_type_key = "employment"
-        elif "privacy" in text:
-            doc_type = "privacy policy"
-            doc_type_key = "privacy_policy"
+        # Simple document type detection
+        if any(word in text_lower for word in ["contract", "agreement", "terms"]):
+            doc_type = "contract"
+            purpose = "Legal agreement between parties"
+        elif any(word in text_lower for word in ["lease", "rental", "rent"]):
+            doc_type = "lease"
+            purpose = "Property rental agreement"
+        elif any(word in text_lower for word in ["employment", "job", "work", "employee"]):
+            doc_type = "employment"
+            purpose = "Employment-related document"
+        elif any(word in text_lower for word in ["nda", "confidential", "non-disclosure", "confidentiality"]):
+            doc_type = "nda"
+            purpose = "Non-disclosure agreement"
         else:
-            doc_type = "legal document"
-            doc_type_key = "legal_document"
+            doc_type = "legal_document"
+            purpose = "Legal document requiring review"
         
-        # Extract basic information
-        state["document_summary"] = f"This appears to be a {doc_type}. The document contains legal terms and conditions that should be reviewed carefully."
-        state["document_purpose"] = f"The main purpose appears to be establishing a {doc_type} between parties."
-        state["document_type"] = doc_type_key
-        state["confidence_score"] = 0.60  # Lower confidence for fallback analysis
-        
-        # Simple party detection
+        # Extract potential parties (very basic)
         parties = []
-        if "company" in text or "corporation" in text:
-            parties.append("Company/Corporation")
-        if "user" in text or "customer" in text or "client" in text:
-            parties.append("User/Customer")
-        if "employee" in text:
-            parties.append("Employee")
-        if "tenant" in text:
-            parties.append("Tenant")
-        if "landlord" in text:
-            parties.append("Landlord")
+        party_indicators = ["party", "company", "corporation", "llc", "inc", "ltd"]
+        lines = document_text.split('\n')
+        for line in lines[:10]:  # Check first 10 lines
+            if any(indicator in line.lower() for indicator in party_indicators):
+                parties.append(line.strip()[:100])  # Limit length
         
-        state["key_parties"] = parties if parties else ["Multiple parties as specified in document"]
-        
-        # Simple date detection
+        # Basic date extraction (simplified)
         import re
-        date_patterns = [
-            r'\d{1,2}/\d{1,2}/\d{4}',
-            r'\d{4}-\d{2}-\d{2}',
-            r'[A-Za-z]+ \d{1,2}, \d{4}'
-        ]
+        date_pattern = r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b'
+        dates = re.findall(date_pattern, document_text)
         
-        dates = []
-        for pattern in date_patterns:
-            matches = re.findall(pattern, document_text)
-            dates.extend(matches[:3])  # Limit to first 3 dates
-        
-        state["important_dates"] = dates if dates else ["Dates specified within document"]
-        
-        logger.info("DocumentSummarizerAgent: Fallback analysis completed")
+        return {
+            "document_summary": f"This appears to be a {doc_type.replace('_', ' ')} document.",
+            "document_purpose": purpose,
+            "key_parties": parties[:3],  # Limit to 3 parties
+            "important_dates": dates[:5]  # Limit to 5 dates
+        }

@@ -7,13 +7,13 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAnalysisAgent
 from app.core.graph_state import DocumentAnalysisState, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
 
-class ActionPlannerAgent(BaseAgent):
+class ActionPlannerAgent(BaseAnalysisAgent):
     """
     Specialized agent for creating actionable next steps and recommendations.
     
@@ -44,250 +44,128 @@ class ActionPlannerAgent(BaseAgent):
         Returns:
             Updated state with action plan
         """
-        logger.info(f"ActionPlannerAgent: Starting analysis for file {state['file_id']}")
-        
-        try:
-            state["current_step"] = "Creating action plan"
-            state["progress_percentage"] = 80.0
-            
-            if not self._validate_document_text(state):
-                return self._update_state_with_error(
-                    state, 
-                    "No document text available for action planning", 
-                    "action_planner"
-                )
-            
-            document_text = state["extracted_text"]
-            
-            # Load prompt and call LLM
-            prompt = self._load_prompt()
-            llm_response = await self._call_llm(prompt, document_text)
-            
-            if llm_response:
-                try:
-                    # Parse JSON response
-                    result = json.loads(llm_response)
-                    
-                    # Update state with AI results
-                    state["immediate_actions"] = result.get("immediate_actions", [])
-                    state["long_term_actions"] = result.get("long_term_actions", [])
-                    state["deadlines"] = result.get("deadlines", [])
-                    state["recommendations"] = result.get("recommendations", [])
-                    
-                    logger.info(f"ActionPlannerAgent: AI analysis completed for file {state['file_id']}")
-                    
-                except json.JSONDecodeError as e:
-                    logger.warning(f"ActionPlannerAgent: Failed to parse AI response, using fallback: {e}")
-                    self._fallback_analysis(state, document_text)
-            else:
-                logger.warning("ActionPlannerAgent: No AI response, using fallback analysis")
-                self._fallback_analysis(state, document_text)
-            
-            state["progress_percentage"] = 90.0
-            logger.info(f"ActionPlannerAgent: Analysis completed for file {state['file_id']}")
-            
-        except Exception as e:
-            return self._update_state_with_error(
-                state, 
-                f"Action planning failed: {str(e)}", 
-                "action_planner"
-            )
-        
+        return await self._analyze_with_llm(state, "action planning", 90.0)
+    
+    def _update_state_with_results(self, state: DocumentAnalysisState, results: Dict[str, Any]) -> DocumentAnalysisState:
+        """Update state with action planning results."""
+        state["immediate_actions"] = results.get("immediate_actions", [])
+        state["long_term_actions"] = results.get("long_term_actions", [])
+        state["deadlines"] = results.get("deadlines", [])
+        state["recommendations"] = results.get("recommendations", [])
         return state
     
-    def _fallback_analysis(self, state: DocumentAnalysisState, document_text: str) -> None:
-        """
-        Fallback action planning when AI is not available.
+    def _get_fallback_results(self, document_text: str) -> Dict[str, Any]:
+        """Provide basic action planning when LLM fails."""
+        text_lower = document_text.lower()
         
-        Args:
-            state: Current analysis state
-            document_text: Text to analyze
-        """
-        text = document_text.lower()
         immediate_actions = []
         long_term_actions = []
         deadlines = []
         recommendations = []
         
-        # Check for signature requirements
-        signature_terms = ["sign", "signature", "execute", "executed by"]
-        if any(term in text for term in signature_terms):
+        # Time-sensitive indicators
+        time_indicators = {
+            "within": "Review document for time-sensitive requirements",
+            "deadline": "Identify all deadlines and mark them in your calendar",
+            "expire": "Note expiration dates and set reminders",
+            "terminate": "Understand termination procedures and notice requirements",
+            "notice": "Review all notice requirements and delivery methods",
+            "signature": "Ensure all parties have signed the document",
+            "effective date": "Confirm the effective date and any conditions precedent"
+        }
+        
+        for indicator, action in time_indicators.items():
+            if indicator in text_lower:
+                immediate_actions.append({
+                    "action": action,
+                    "priority": "high",
+                    "category": "time_sensitive"
+                })
+        
+        # Payment-related actions
+        payment_terms = ["payment", "pay", "fee", "invoice", "billing"]
+        if any(term in text_lower for term in payment_terms):
             immediate_actions.append({
-                "action": "Review document thoroughly before signing",
-                "priority": "HIGH",
-                "description": "Ensure you understand all terms and conditions"
+                "action": "Set up payment tracking and ensure compliance with payment terms",
+                "priority": "high",
+                "category": "financial"
             })
+            recommendations.append("Consider setting up automated reminders for payment due dates")
+        
+        # Legal review actions
+        complex_terms = ["indemnification", "liability", "arbitration", "governing law"]
+        if any(term in text_lower for term in complex_terms):
             immediate_actions.append({
-                "action": "Verify all parties' signatures are required",
-                "priority": "HIGH",
-                "description": "Confirm who needs to sign and in what order"
+                "action": "Have document reviewed by qualified legal counsel",
+                "priority": "high",
+                "category": "legal"
             })
         
-        # Check for payment terms
-        payment_terms = ["payment", "pay", "due", "invoice", "fee", "cost"]
-        if any(term in text for term in payment_terms):
-            immediate_actions.append({
-                "action": "Set up payment tracking system",
-                "priority": "MEDIUM",
-                "description": "Track payment due dates to avoid late fees"
-            })
+        # Insurance and risk management
+        insurance_terms = ["insurance", "liability", "damage", "loss"]
+        if any(term in text_lower for term in insurance_terms):
             long_term_actions.append({
-                "action": "Budget for ongoing payment obligations",
-                "priority": "MEDIUM",
-                "description": "Ensure sufficient funds for all required payments"
+                "action": "Review insurance coverage to ensure adequate protection",
+                "priority": "medium",
+                "category": "risk_management",
+                "timeframe": "within_30_days"
             })
         
-        # Check for insurance requirements
-        insurance_terms = ["insurance", "insured", "coverage", "policy"]
-        if any(term in text for term in insurance_terms):
+        # Compliance actions
+        compliance_terms = ["comply", "regulation", "law", "requirement"]
+        if any(term in text_lower for term in compliance_terms):
             immediate_actions.append({
-                "action": "Verify insurance coverage requirements",
-                "priority": "HIGH",
-                "description": "Ensure you have adequate insurance as specified"
-            })
-            long_term_actions.append({
-                "action": "Review insurance policies annually",
-                "priority": "LOW",
-                "description": "Keep insurance coverage current and adequate"
+                "action": "Create compliance checklist and monitoring procedures",
+                "priority": "high",
+                "category": "compliance"
             })
         
-        # Check for compliance requirements
-        compliance_terms = ["comply", "compliance", "regulation", "standard"]
-        if any(term in text for term in compliance_terms):
-            immediate_actions.append({
-                "action": "Research applicable compliance requirements",
-                "priority": "HIGH",
-                "description": "Understand all regulatory obligations"
-            })
-            long_term_actions.append({
-                "action": "Implement compliance monitoring system",
-                "priority": "MEDIUM",
-                "description": "Regularly check compliance status"
-            })
+        # Record keeping
+        immediate_actions.append({
+            "action": "File document in secure location with backup copies",
+            "priority": "medium",
+            "category": "record_keeping"
+        })
         
-        # Check for renewal/termination clauses
-        renewal_terms = ["renew", "renewal", "terminate", "termination", "expire"]
-        if any(term in text for term in renewal_terms):
-            immediate_actions.append({
-                "action": "Calendar important contract dates",
-                "priority": "HIGH",
-                "description": "Set reminders for renewal and termination deadlines"
-            })
-            long_term_actions.append({
-                "action": "Review contract performance before renewal",
-                "priority": "MEDIUM",
-                "description": "Evaluate if contract terms should be renegotiated"
-            })
-        
-        # Check for confidentiality/non-disclosure
-        confidentiality_terms = ["confidential", "non-disclosure", "nda", "proprietary"]
-        if any(term in text for term in confidentiality_terms):
-            immediate_actions.append({
-                "action": "Implement information security measures",
-                "priority": "HIGH",
-                "description": "Protect confidential information as required"
-            })
-            immediate_actions.append({
-                "action": "Train team on confidentiality requirements",
-                "priority": "MEDIUM",
-                "description": "Ensure all relevant parties understand obligations"
-            })
-        
-        # Check for intellectual property
-        ip_terms = ["intellectual property", "copyright", "trademark", "patent"]
-        if any(term in text for term in ip_terms):
-            immediate_actions.append({
-                "action": "Document existing intellectual property",
-                "priority": "MEDIUM",
-                "description": "Create inventory of relevant IP assets"
-            })
-            long_term_actions.append({
-                "action": "Monitor IP usage and infringement",
-                "priority": "LOW",
-                "description": "Regularly check for unauthorized use"
-            })
-        
-        # Create deadlines based on common patterns
+        # Default deadlines based on common document types
         current_date = datetime.now()
         
-        # Look for date patterns
-        if "30 days" in text or "thirty days" in text:
+        if "contract" in text_lower or "agreement" in text_lower:
             deadlines.append({
-                "deadline": (current_date + timedelta(days=30)).strftime("%Y-%m-%d"),
-                "description": "30-day deadline mentioned in document",
-                "priority": "MEDIUM"
+                "item": "Contract review period",
+                "date": (current_date + timedelta(days=7)).strftime("%Y-%m-%d"),
+                "description": "Complete thorough review of all contract terms",
+                "priority": "high"
             })
         
-        if "60 days" in text or "sixty days" in text:
-            deadlines.append({
-                "deadline": (current_date + timedelta(days=60)).strftime("%Y-%m-%d"),
-                "description": "60-day deadline mentioned in document",
-                "priority": "MEDIUM"
-            })
-        
-        if "annual" in text or "yearly" in text:
-            deadlines.append({
-                "deadline": (current_date + timedelta(days=365)).strftime("%Y-%m-%d"),
-                "description": "Annual review or renewal deadline",
-                "priority": "LOW"
-            })
-        
-        # General recommendations based on document type
-        if "employment" in text or "employee" in text:
-            recommendations.extend([
-                "Keep detailed records of work performance and communications",
-                "Understand your employee rights under local labor laws",
-                "Save a copy of the employee handbook if referenced"
-            ])
-        
-        if "lease" in text or "rental" in text:
-            recommendations.extend([
-                "Document property condition with photos before move-in",
-                "Understand local tenant rights and landlord obligations",
-                "Keep receipts for security deposits and rental payments"
-            ])
-        
-        if "purchase" in text or "sale" in text:
-            recommendations.extend([
-                "Keep all purchase documentation and warranties",
-                "Understand return and refund policies",
-                "Research consumer protection laws in your jurisdiction"
-            ])
-        
-        if "service" in text:
-            recommendations.extend([
-                "Monitor service quality and delivery timelines",
-                "Keep records of all service communications",
-                "Understand escalation procedures for service issues"
-            ])
-        
-        # Default actions if nothing specific found
-        if not immediate_actions:
-            immediate_actions.append({
-                "action": "Have document reviewed by qualified attorney",
-                "priority": "HIGH",
-                "description": "Professional legal review recommended"
-            })
-        
-        if not long_term_actions:
-            long_term_actions.append({
-                "action": "Schedule periodic review of contract performance",
-                "priority": "LOW",
-                "description": "Regular evaluation ensures ongoing compliance"
-            })
-        
-        # Add general recommendations
+        # General recommendations
         recommendations.extend([
-            "Keep original signed documents in a secure location",
-            "Maintain organized records of all related communications",
-            "Consider setting up automated reminders for important dates",
-            "Review document terms if circumstances change significantly"
+            "Keep all original documents in a secure location",
+            "Create calendar reminders for important dates and deadlines",
+            "Maintain detailed records of all communications related to this document",
+            "Review document annually or as circumstances change",
+            "Ensure all parties have current contact information"
         ])
         
-        # Update state
-        state["immediate_actions"] = immediate_actions
-        state["long_term_actions"] = long_term_actions
-        state["deadlines"] = deadlines
-        state["recommendations"] = recommendations
+        # Long-term planning
+        long_term_actions.extend([
+            {
+                "action": "Schedule periodic review of document terms and compliance",
+                "priority": "medium",
+                "category": "maintenance",
+                "timeframe": "quarterly"
+            },
+            {
+                "action": "Assess impact of document on business operations and strategy",
+                "priority": "medium",
+                "category": "strategic",
+                "timeframe": "within_60_days"
+            }
+        ])
         
-        logger.info(f"ActionPlannerAgent: Fallback analysis completed with {len(immediate_actions)} immediate actions")
+        return {
+            "immediate_actions": immediate_actions[:10],  # Limit to 10 items
+            "long_term_actions": long_term_actions[:8],   # Limit to 8 items
+            "deadlines": deadlines[:5],                   # Limit to 5 items
+            "recommendations": recommendations[:12]        # Limit to 12 items
+        }
