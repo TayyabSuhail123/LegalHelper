@@ -13,7 +13,7 @@ import PyPDF2
 from docx import Document
 from fastapi import UploadFile, HTTPException
 
-from app.models.file_processing import FileType, UploadedFile, ProcessingStatus
+from app.models.file_processing import FileType, DocumentFile, ProcessingStatus
 from app.services.storage import FileStorageManager
 from app.core.config import Settings
 
@@ -273,7 +273,7 @@ class FileProcessingService:
             # Log error but don't raise - file cleanup shouldn't break the flow
             print(f"Warning: Failed to cleanup file {file_path}: {e}")
     
-    async def process_file(self, file: UploadFile) -> UploadedFile:
+    async def process_file(self, file: UploadFile) -> DocumentFile:
         """
         Complete file processing pipeline.
         
@@ -289,7 +289,7 @@ class FileProcessingService:
             raise HTTPException(status_code=400, detail=error_message)
         
         # Create file record
-        uploaded_file = UploadedFile(
+        uploaded_file = DocumentFile(
             filename=file.filename,
             file_type=file_type,
             file_size=file.size or 0,

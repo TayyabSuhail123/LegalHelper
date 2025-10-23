@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from datetime import datetime, UTC
 
 from app.core import settings
-from app.models import HealthResponse
+from app.schemas.responses import HealthResponse
 
 router = APIRouter()
 

@@ -1,23 +1,31 @@
 """File upload and processing API endpoints."""
 
 import logging
-import traceback
 from typing import Dict, Any, Optional
 from uuid import UUID
-from functools import lru_cache
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from app.models.file_processing import (
-    FileUploadResponse,
     ProcessingStatus,
-    ProcessingProgress,
-    UploadedFile
+    DocumentFile,
 )
+from app.schemas.file_schemas import (
+    FileUploadResponse,
+    ProcessingProgressResponse,
+    FileDetailsResponse,
+    AnalysisResultResponse,
+    DeleteFileResponse,
+    SupportedFormatsResponse,
+    StorageStatsResponse,
+    CleanupResponse,
+)
+from app.schemas.responses import ErrorResponse
+from app.schemas.file_schemas import StorageStatsResponse, CleanupResponse
 from app.core.dependencies import FileProcessingServiceDep, FileServiceDep, AnalysisServiceDep
 from app.services.file_service import FileService
+from app.core.error_handlers import APIErrorHandler, ValidationUtils, error_context
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -31,51 +39,6 @@ MAX_PAGE_SIZE = 100
 router = APIRouter()
 
 
-# Response Models
-class StorageStatsResponse(BaseModel):
-    """Storage statistics response model."""
-    storage_stats: Dict[str, Any]
-    cleanup_enabled: bool
-    cleanup_interval_hours: float
-
-
-class CleanupResponse(BaseModel):
-    """Cleanup operation response model."""
-    success: bool
-    message: str
-    files_removed: int
-    space_freed_mb: float
-    stats_before: Dict[str, Any]
-    stats_after: Dict[str, Any]
-
-
-def validate_file_id(file_id: str) -> str:
-    """Validate file ID format."""
-    try:
-        UUID(file_id)
-        return file_id
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file ID format"
-        )
-
-
-def validate_pagination(limit: int, offset: int) -> tuple[int, int]:
-    """Validate pagination parameters."""
-    if limit <= 0 or limit > MAX_PAGE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Limit must be between 1 and {MAX_PAGE_SIZE}"
-        )
-    if offset < 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Offset must be non-negative"
-        )
-    return limit, offset
-
-
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     file_service: FileServiceDep,
@@ -87,7 +50,7 @@ async def upload_file(
     Supports PDF, DOCX, and TXT files up to 50MB.
     Returns immediately with file_id for tracking processing status.
     """
-    try:
+    with error_context("file_upload"):
         logger.info(f"Starting file upload for: {file.filename}")
         
         # Use service layer for file processing
@@ -101,21 +64,6 @@ async def upload_file(
             file_id=uploaded_file.file_id,
             processing_status=uploaded_file.processing_status,
             estimated_processing_time=None
-        )
-        
-    except HTTPException as he:
-        logger.warning(f"HTTP exception during file upload: {he.status_code} - {he.detail}")
-        logger.warning(f"File: {file.filename}")
-        raise he
-    except Exception as e:
-        logger.error(f"Unexpected error during file upload for file: {file.filename}")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(f"Error message: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while processing your file. Please try again."
         )
 
 
@@ -134,18 +82,18 @@ async def analyze_document(
     Returns:
         Analysis initiation response with tracking information
     """
-    try:
+    with error_context("document_analysis", file_id):
         # Validate file ID format
-        validate_file_id(file_id)
+        ValidationUtils.validate_file_id(file_id)
         
         # Get file content and metadata
         file_content = await file_service.get_file_content(file_id)
         if not file_content:
-            raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+            raise APIErrorHandler.handle_not_found_error("File", file_id)
             
         file_details = await file_service.get_file_details(file_id)
         if not file_details:
-            raise HTTPException(status_code=404, detail=f"File details for {file_id} not found")
+            raise APIErrorHandler.handle_not_found_error("File details", file_id)
         
         # Use core analysis service directly
         result = await analysis_service.analyze_document(
@@ -155,16 +103,6 @@ async def analyze_document(
         )
         
         return result
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Document analysis failed for {file_id}: {str(e)}")
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
 
 
 @router.get("/analysis/{file_id}")
@@ -182,7 +120,7 @@ async def get_analysis_result(
         Complete analysis result
     """
     try:
-        validate_file_id(file_id)
+        ValidationUtils.validate_file_id(file_id)
         
         result = await analysis_service.get_analysis_result(file_id)
         
@@ -205,15 +143,15 @@ async def get_analysis_result(
         )
 
 
-@router.get("/status/{file_id}", response_model=ProcessingProgress)
+@router.get("/status/{file_id}", response_model=ProcessingProgressResponse)
 async def get_processing_progress(
     file_id: str,
     file_service: FileServiceDep
-) -> ProcessingProgress:
+) -> ProcessingProgressResponse:
     """
     Get processing status for an uploaded file or analysis.
     """
-    validate_file_id(file_id)
+    ValidationUtils.validate_file_id(file_id)
     
     try:
         return await file_service.get_processing_status(file_id)
@@ -225,13 +163,13 @@ async def get_processing_progress(
         )
 
 
-@router.get("/files/{file_id}", response_model=UploadedFile)
+@router.get("/files/{file_id}", response_model=FileDetailsResponse)
 async def get_file_details(
     file_id: str,
     file_service: FileServiceDep
-) -> UploadedFile:
+) -> FileDetailsResponse:
     """Get detailed information about an uploaded file."""
-    validate_file_id(file_id)
+    ValidationUtils.validate_file_id(file_id)
     
     try:
         file_details = await file_service.get_file_details(file_id)
@@ -258,7 +196,7 @@ async def list_uploaded_files(
     offset: int = 0
 ) -> Dict[str, Any]:
     """List all uploaded files with pagination."""
-    limit, offset = validate_pagination(limit, offset)
+    limit, offset = ValidationUtils.validate_pagination(limit, offset)
     
     try:
         return await file_service.list_files(limit=limit, offset=offset)
@@ -276,7 +214,7 @@ async def delete_file(
     file_service: FileServiceDep
 ) -> JSONResponse:
     """Delete an uploaded file and its data."""
-    validate_file_id(file_id)
+    ValidationUtils.validate_file_id(file_id)
     
     try:
         success = await file_service.delete_file(file_id)

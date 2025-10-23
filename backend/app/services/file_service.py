@@ -5,7 +5,8 @@ from typing import Optional, List, Dict, Any
 from fastapi import UploadFile, HTTPException
 
 from app.services.file_processing import FileProcessingService
-from app.models.file_processing import UploadedFile, ProcessingStatus, ProcessingProgress
+from app.models.file_processing import DocumentFile, ProcessingStatus
+from app.schemas.file_schemas import ProcessingProgressResponse
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class FileService:
     def __init__(self, file_processing_service: FileProcessingService):
         self.file_processing_service = file_processing_service
     
-    async def upload_file(self, file: UploadFile) -> UploadedFile:
+    async def upload_file(self, file: UploadFile) -> DocumentFile:
         """
         Upload a file with business validation.
         
@@ -144,12 +145,12 @@ class FileService:
             "error_message": file_info.get("error_message")
         }
     
-    async def get_processing_status(self, file_id: str) -> ProcessingProgress:
+    async def get_processing_status(self, file_id: str) -> ProcessingProgressResponse:
         """Get file processing status."""
         try:
             file_info = await self.get_file(file_id)
             if not file_info:
-                return ProcessingProgress(
+                return ProcessingProgressResponse(
                     file_id=file_id,
                     status=ProcessingStatus.NOT_FOUND,
                     progress_percentage=0.0,
@@ -164,7 +165,7 @@ class FileService:
             except ValueError:
                 status = ProcessingStatus.UPLOADED
             
-            return ProcessingProgress(
+            return ProcessingProgressResponse(
                 file_id=file_id,
                 status=status,
                 progress_percentage=file_info.get("progress_percentage", 0.0),
@@ -173,7 +174,7 @@ class FileService:
             )
         except Exception as e:
             logger.error(f"Failed to get processing status for {file_id}: {e}")
-            return ProcessingProgress(
+            return ProcessingProgressResponse(
                 file_id=file_id,
                 status=ProcessingStatus.FAILED,
                 progress_percentage=0.0,

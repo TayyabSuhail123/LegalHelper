@@ -1,4 +1,4 @@
-"""File upload and processing models."""
+"""Business models for file processing and document analysis."""
 
 from enum import Enum
 from typing import Optional, Dict, Any, List
@@ -31,63 +31,109 @@ class RiskLevel(str, Enum):
     CRITICAL = "critical"
 
 
-class UploadedFile(BaseModel):
-    """Uploaded file information."""
+class DocumentFile(BaseModel):
+    """Business model for uploaded document files."""
     file_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     filename: str
     file_type: FileType
     file_size: int
     upload_timestamp: datetime = Field(default_factory=datetime.utcnow)
     processing_status: ProcessingStatus = ProcessingStatus.UPLOADED
+    
+    # Internal storage details
+    storage_path: Optional[str] = None
     extracted_text: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Error tracking
     error_message: Optional[str] = None
+    retry_count: int = 0
+    
+    def mark_processing(self) -> None:
+        """Mark file as being processed."""
+        self.processing_status = ProcessingStatus.PROCESSING
+    
+    def mark_completed(self, extracted_text: str) -> None:
+        """Mark file processing as completed."""
+        self.processing_status = ProcessingStatus.COMPLETED
+        self.extracted_text = extracted_text
+        self.error_message = None
+    
+    def mark_failed(self, error: str) -> None:
+        """Mark file processing as failed."""
+        self.processing_status = ProcessingStatus.FAILED
+        self.error_message = error
+        self.retry_count += 1
 
 
-class ContractAnalysis(BaseModel):
-    """Contract analysis results."""
+class DocumentAnalysis(BaseModel):
+    """Business model for document analysis results."""
     analysis_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     file_id: str
+    document_file: Optional[DocumentFile] = None
+    
+    # Risk assessment
     overall_risk_score: float = Field(ge=0, le=10, description="Risk score from 0-10")
     overall_risk_level: RiskLevel
-    analysis_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Analysis content
+    document_summary: Optional[str] = None
+    document_purpose: Optional[str] = None
+    key_parties: List[str] = Field(default_factory=list)
+    important_dates: List[str] = Field(default_factory=list)
     
     # Risk categories
-    financial_risks: List[Dict[str, Any]] = Field(default_factory=list)
     legal_risks: List[Dict[str, Any]] = Field(default_factory=list)
+    potential_liabilities: List[str] = Field(default_factory=list)
+    financial_risks: List[Dict[str, Any]] = Field(default_factory=list)
     operational_risks: List[Dict[str, Any]] = Field(default_factory=list)
-    termination_risks: List[Dict[str, Any]] = Field(default_factory=list)
     
-    # Analysis details
-    key_findings: List[str] = Field(default_factory=list)
-    recommendations: List[str] = Field(default_factory=list)
-    missing_clauses: List[str] = Field(default_factory=list)
-    problematic_clauses: List[Dict[str, Any]] = Field(default_factory=list)
+    # Detailed findings
+    suspicious_clauses: List[Dict[str, Any]] = Field(default_factory=list)
+    hidden_fees: List[str] = Field(default_factory=list)
+    fraud_indicators: List[str] = Field(default_factory=list)
     
-    # Executive summary
-    executive_summary: Optional[str] = None
-
-
-class FileUploadResponse(BaseModel):
-    """Response for file upload."""
-    success: bool
-    message: str
-    file_id: Optional[str] = None
-    processing_status: ProcessingStatus
-    estimated_processing_time: Optional[int] = None  # in seconds
-
-
-class AnalysisResponse(BaseModel):
-    """Response for analysis request."""
-    success: bool
-    message: str
-    analysis: Optional[ContractAnalysis] = None
-
-
-class ProcessingProgress(BaseModel):
-    """Processing progress information."""
-    file_id: str
-    status: ProcessingStatus
-    progress_percentage: float = Field(ge=0, le=100)
-    current_step: str
-    estimated_time_remaining: Optional[int] = None  # in seconds
-    error_message: Optional[str] = None
+    # Legal advice
+    legal_implications: List[str] = Field(default_factory=list)
+    your_rights: List[str] = Field(default_factory=list)
+    their_obligations: List[str] = Field(default_factory=list)
+    potential_consequences: List[str] = Field(default_factory=list)
+    
+    # Action items
+    immediate_actions: List[str] = Field(default_factory=list)
+    before_signing: List[str] = Field(default_factory=list)
+    long_term_considerations: List[str] = Field(default_factory=list)
+    recommended_timeline: Optional[str] = None
+    
+    # Metadata
+    analysis_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    processing_time: Optional[float] = None
+    confidence_score: float = 0.0
+    
+    def calculate_overall_risk(self) -> None:
+        """Calculate overall risk score based on individual risk categories."""
+        # Simple risk calculation - can be made more sophisticated
+        risk_weights = {
+            'legal_risks': 0.3,
+            'financial_risks': 0.3,
+            'operational_risks': 0.2,
+            'fraud_indicators': 0.2
+        }
+        
+        total_score = 0.0
+        total_score += len(self.legal_risks) * risk_weights['legal_risks'] * 2
+        total_score += len(self.financial_risks) * risk_weights['financial_risks'] * 2
+        total_score += len(self.operational_risks) * risk_weights['operational_risks'] * 2
+        total_score += len(self.fraud_indicators) * risk_weights['fraud_indicators'] * 3
+        
+        self.overall_risk_score = min(total_score, 10.0)
+        
+        # Determine risk level
+        if self.overall_risk_score >= 8:
+            self.overall_risk_level = RiskLevel.CRITICAL
+        elif self.overall_risk_score >= 6:
+            self.overall_risk_level = RiskLevel.HIGH
+        elif self.overall_risk_score >= 3:
+            self.overall_risk_level = RiskLevel.MEDIUM
+        else:
+            self.overall_risk_level = RiskLevel.LOW
