@@ -36,19 +36,19 @@ class DocumentAnalysisWorkflow:
         self.agents = LegalAnalysisAgents(file_service)
         self.graph = self._build_graph()
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> Any:
         """Build the multi-agent LangGraph workflow."""
 
         # Create the state graph
         workflow = StateGraph(DocumentAnalysisState)
 
         # Add agent nodes
-        workflow.add_node("text_extraction", self.agents.text_extraction_node)
-        workflow.add_node("document_summarizer", self.agents.document_summarizer_agent)
-        workflow.add_node("risk_assessor", self.agents.risk_assessment_agent)
-        workflow.add_node("fraud_detector", self.agents.fraud_detection_agent)
-        workflow.add_node("legal_advisor", self.agents.legal_advisor_agent)
-        workflow.add_node("action_planner", self.agents.action_planner_agent)
+        workflow.add_node("text_extraction", self.agents.text_extraction_node)  # type: ignore
+        workflow.add_node("document_summarizer", self.agents.document_summarizer_agent)  # type: ignore
+        workflow.add_node("risk_assessor", self.agents.risk_assessment_agent)  # type: ignore
+        workflow.add_node("fraud_detector", self.agents.fraud_detection_agent)  # type: ignore
+        workflow.add_node("legal_advisor", self.agents.legal_advisor_agent)  # type: ignore
+        workflow.add_node("action_planner", self.agents.action_planner_agent)  # type: ignore
 
         # Define the multi-agent flow
         workflow.set_entry_point("text_extraction")
@@ -108,13 +108,20 @@ class DocumentAnalysisWorkflow:
             "fraud_indicators": None,
             "fraud_risk_score": 0.0,
             "legal_implications": None,
+            "rights_obligations": None,
+            "compliance_issues": None,
+            "legal_advice": None,
             "your_rights": None,
             "their_obligations": None,
             "potential_consequences": None,
             "immediate_actions": None,
+            "long_term_actions": None,
+            "deadlines": None,
+            "recommendations": None,
             "before_signing": None,
             "long_term_considerations": None,
             "recommended_timeline": None,
+            "summary": None,
             # Legacy fields
             "document_type": None,
             "confidence_score": 0.0,

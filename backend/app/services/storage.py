@@ -5,6 +5,7 @@ import logging
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +28,15 @@ class FileStorageManager:
         """
         self.base_dir = Path(base_dir)
         self.cleanup_interval = cleanup_interval
-        self._file_registry: dict[str, dict] = {}
-        self._cleanup_task: asyncio.Task | None = None
+        self._file_registry: dict[str, dict[str, Any]] = {}
+        self._cleanup_task: asyncio.Task[None] | None = None
 
         # Create directory if it doesn't exist
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
         # Note: Cleanup task will be started when first async method is called
 
-    def _start_cleanup_task(self):
+    def _start_cleanup_task(self) -> None:
         """Start the background cleanup task if there's an event loop."""
         try:
             if self._cleanup_task is None or self._cleanup_task.done():
@@ -44,7 +45,7 @@ class FileStorageManager:
             # No event loop running, cleanup task will start when first async method is called
             pass
 
-    async def _cleanup_loop(self):
+    async def _cleanup_loop(self) -> None:
         """Background task to clean up old files."""
         while True:
             try:
@@ -147,7 +148,7 @@ class FileStorageManager:
             logger.error(f"Error removing file {file_id}: {e}")
             return False
 
-    async def cleanup_old_files(self, max_age_hours: int = 24):
+    async def cleanup_old_files(self, max_age_hours: int = 24) -> None:
         """
         Clean up files older than specified age.
 
@@ -167,7 +168,7 @@ class FileStorageManager:
         if files_to_remove:
             logger.info(f"Cleaned up {len(files_to_remove)} old files")
 
-    async def get_storage_stats(self) -> dict:
+    async def get_storage_stats(self) -> dict[str, Any]:
         """Get storage statistics."""
         total_files = len(self._file_registry)
         total_size = 0
@@ -186,7 +187,7 @@ class FileStorageManager:
             "base_directory": str(self.base_dir),
         }
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup when object is destroyed."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()

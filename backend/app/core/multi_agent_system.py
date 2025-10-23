@@ -107,7 +107,7 @@ class LegalAnalysisAgents:
                 return state
 
             # Run document summarizer
-            await self.document_summarizer.analyze(state)
+            await self.document_summarizer.analyze(state)  # type: ignore[arg-type]
             state["progress_percentage"] = 50.0
 
             logger.info("Document summarizer agent completed")
@@ -131,7 +131,7 @@ class LegalAnalysisAgents:
                 return state
 
             # Run risk assessor
-            await self.risk_assessor.analyze(state)
+            await self.risk_assessor.analyze(state)  # type: ignore[arg-type]
             state["progress_percentage"] = 70.0
 
             logger.info("Risk assessment agent completed")
@@ -155,7 +155,7 @@ class LegalAnalysisAgents:
                 return state
 
             # Run fraud detector
-            await self.fraud_detector.analyze(state)
+            await self.fraud_detector.analyze(state)  # type: ignore[arg-type]
             state["progress_percentage"] = 85.0
 
             logger.info("Fraud detection agent completed")
@@ -179,7 +179,7 @@ class LegalAnalysisAgents:
                 return state
 
             # Run legal advisor
-            await self.legal_advisor.analyze(state)
+            await self.legal_advisor.analyze(state)  # type: ignore[arg-type]
             state["progress_percentage"] = 95.0
 
             logger.info("Legal advisor agent completed")
@@ -203,7 +203,7 @@ class LegalAnalysisAgents:
                 return state
 
             # Run action planner
-            await self.action_planner.analyze(state)
+            await self.action_planner.analyze(state)  # type: ignore[arg-type]
             state["current_step"] = "Analysis completed"
             state["progress_percentage"] = 100.0
 
@@ -226,7 +226,7 @@ class LegalAnalysisAgents:
 
             # Get immediate actions count
             immediate_actions = state.get("immediate_actions", [])
-            action_count = len(immediate_actions)
+            action_count = len(immediate_actions) if immediate_actions else 0
 
             # Create executive summary
             executive_summary = f"Analysis of {doc_type} completed. "
@@ -247,17 +247,18 @@ class LegalAnalysisAgents:
 
             # Add specific findings if available
             if state.get("suspicious_clauses"):
-                key_findings.append(f"Suspicious clauses: {len(state['suspicious_clauses'])} found")
+                suspicious = state['suspicious_clauses']
+                count = len(suspicious) if suspicious else 0
+                key_findings.append(f"Suspicious clauses: {count} found")
 
             if state.get("legal_implications"):
-                key_findings.append(
-                    f"Legal implications: {len(state['legal_implications'])} identified"
-                )
+                implications = state['legal_implications']
+                count = len(implications) if implications else 0
+                key_findings.append(f"Legal implications: {count} identified")
 
-            state["summary"] = {
-                "executive_summary": executive_summary,
-                "key_findings": key_findings,
-            }
+            state["summary"] = executive_summary
+            state["executive_summary"] = executive_summary
+            state["key_findings"] = key_findings
 
         except Exception as e:
             logger.warning(f"Failed to create final summary: {e}")
@@ -268,12 +269,14 @@ class LegalAnalysisAgents:
         doc_type = state.get("document_type", "legal document")
         risk_level = state.get("risk_level", "medium")
 
-        state["summary"] = {
-            "executive_summary": f"Analysis completed for {doc_type}. Risk level: {risk_level}. Professional review recommended for important decisions.",
-            "key_findings": [
-                f"Document identified as: {doc_type}",
-                f"Overall risk level: {risk_level}",
-                "Professional legal review recommended",
-                "Read document carefully before signing",
-            ],
-        }
+        fallback_summary = f"Analysis completed for {doc_type}. Risk level: {risk_level}. Professional review recommended for important decisions."
+        fallback_findings = [
+            f"Document identified as: {doc_type}",
+            f"Overall risk level: {risk_level}",
+            "Professional legal review recommended",
+            "Read document carefully before signing",
+        ]
+        
+        state["summary"] = fallback_summary
+        state["executive_summary"] = fallback_summary
+        state["key_findings"] = fallback_findings

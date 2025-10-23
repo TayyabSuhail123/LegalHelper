@@ -100,15 +100,24 @@ class DocumentAnalysisState(TypedDict):
 
     # Legal Advisor Agent
     legal_implications: list[str] | None
+    rights_obligations: list[dict[str, Any]] | None  # Added missing field
+    compliance_issues: list[dict[str, Any]] | None   # Added missing field
+    legal_advice: list[str] | None                   # Added missing field
     your_rights: list[str] | None
     their_obligations: list[str] | None
     potential_consequences: list[str] | None
 
     # Action Planner Agent
-    immediate_actions: list[str] | None
+    immediate_actions: list[dict[str, Any]] | None   # Changed from list[str] to match agent
+    long_term_actions: list[dict[str, Any]] | None   # Added missing field
+    deadlines: list[dict[str, Any]] | None           # Added missing field
+    recommendations: list[str] | None                # Added missing field
     before_signing: list[str] | None
     long_term_considerations: list[str] | None
     recommended_timeline: str | None
+
+    # Document Summary fields
+    summary: str | None                              # Added missing field
 
     # Legacy fields (for backward compatibility)
     document_type: DocumentType | None

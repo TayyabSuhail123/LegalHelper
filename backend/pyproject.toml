@@ -184,4 +184,5 @@ dev = [
     "pre-commit>=4.3.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.1",
+    "types-aiofiles>=25.1.0.20251011",
 ]

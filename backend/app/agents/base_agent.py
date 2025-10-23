@@ -35,7 +35,7 @@ class BaseAnalysisAgent(ABC):
         self.file_service = file_service
         self.agent_name = self.__class__.__name__
         self.prompt_file = self._get_prompt_file()
-        self._openai_client = None
+        self._openai_client: openai.AsyncOpenAI | None = None
 
     def _get_prompt_file(self) -> str:
         """Get the prompt file path for this agent."""
@@ -50,7 +50,7 @@ class BaseAnalysisAgent(ABC):
         return os.path.join(agents_dir, "prompts", f"{prompt_name}.prompt")
 
     @property
-    def openai_client(self):
+    def openai_client(self) -> openai.AsyncOpenAI:
         """Lazy-loaded OpenAI client."""
         if self._openai_client is None:
             self._openai_client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
@@ -162,12 +162,15 @@ class BaseAnalysisAgent(ABC):
             logger.debug(f"{self.agent_name}: Calling OpenAI with model: {settings.openai_model}")
             response = await self.openai_client.chat.completions.create(
                 model=settings.openai_model,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 max_tokens=settings.openai_max_tokens,
                 temperature=settings.openai_temperature,
             )
 
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("OpenAI returned empty response")
+            return content
 
         except Exception as e:
             logger.error(f"{self.agent_name}: LLM call failed: {e}")
@@ -210,6 +213,11 @@ class BaseAnalysisAgent(ABC):
                 )
 
             document_text = state["extracted_text"]
+            if not document_text:
+                logger.error(f"{self.agent_name}: No document text available after validation")
+                return self._update_state_with_error(
+                    state, f"No document text available for {step_name}", step_name
+                )
 
             # Load prompt and call LLM
             prompt = await self._load_prompt()

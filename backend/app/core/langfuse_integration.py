@@ -5,7 +5,11 @@ Implements hierarchical tracing: workflow trace contains agent spans.
 
 import logging
 import os
-from typing import Any
+from typing import Any, Callable, Optional, TypeVar
+
+# Initialize variables for type checking
+observe: Optional[Callable[..., Any]] = None
+get_client: Optional[Callable[..., Any]] = None
 
 try:
     from langfuse import get_client, observe
@@ -18,8 +22,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+F = TypeVar('F', bound=Callable[..., Any])
 
-def get_langfuse_client():
+
+def get_langfuse_client() -> Any:
     """Get the LangFuse client."""
     if not LANGFUSE_AVAILABLE:
         logger.warning("LangFuse is not available. Tracing will be disabled.")
@@ -34,6 +40,10 @@ def get_langfuse_client():
             logger.warning("LangFuse credentials not found. Tracing will be disabled.")
             return None
 
+        if get_client is None:
+            logger.warning("LangFuse get_client function not available.")
+            return None
+
         client = get_client()
         logger.info("LangFuse client retrieved successfully")
         return client
@@ -43,11 +53,11 @@ def get_langfuse_client():
         return None
 
 
-def trace_workflow(workflow_name: str):
+def trace_workflow(workflow_name: str) -> Callable[[F], F]:
     """Decorator to trace an entire workflow as the root span."""
 
-    def decorator(func):
-        if not LANGFUSE_AVAILABLE or not observe:
+    def decorator(func: F) -> F:
+        if not LANGFUSE_AVAILABLE or observe is None:
             # Return undecorated function if LangFuse is not available
             return func
 
@@ -58,11 +68,11 @@ def trace_workflow(workflow_name: str):
     return decorator
 
 
-def trace_agent(agent_name: str):
+def trace_agent(agent_name: str) -> Callable[[F], F]:
     """Decorator to trace individual agent execution as child spans."""
 
-    def decorator(func):
-        if not LANGFUSE_AVAILABLE or not observe:
+    def decorator(func: F) -> F:
+        if not LANGFUSE_AVAILABLE or observe is None:
             # Return undecorated function if LangFuse is not available
             return func
 
@@ -80,15 +90,17 @@ def log_workflow_event(event_name: str, data: dict[str, Any]) -> None:
 
     try:
         # Use langfuse.event() to create an event within the current trace
-        langfuse = get_client()
-        if langfuse:
-            langfuse.event(name=event_name, input=data)
+        langfuse_client = get_langfuse_client()
+        if langfuse_client and hasattr(langfuse_client, 'event'):
+            langfuse_client.event(name=event_name, input=data)
             logger.info(f"Logged workflow event: {event_name}")
+        else:
+            logger.debug(f"LangFuse event logging not available for: {event_name}")
     except Exception as e:
         logger.error(f"Failed to log workflow event {event_name}: {e}")
 
 
-def flush_langfuse():
+def flush_langfuse() -> None:
     """Flush any pending LangFuse events."""
     client = get_langfuse_client()
     if client:

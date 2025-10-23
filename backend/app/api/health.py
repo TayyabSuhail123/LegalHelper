@@ -1,6 +1,7 @@
 """Health check API endpoints."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -11,7 +12,7 @@ router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check():
+async def health_check() -> HealthResponse:
     """
     Health check endpoint.
 
@@ -28,7 +29,7 @@ async def health_check():
 
 
 @router.get("/health/detailed")
-async def detailed_health_check():
+async def detailed_health_check() -> dict[str, Any]:
     """
     Detailed health check endpoint.
 

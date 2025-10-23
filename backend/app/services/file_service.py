@@ -82,7 +82,8 @@ class FileService:
     async def delete_file(self, file_id: str) -> bool:
         """Delete a file."""
         try:
-            success = await self.file_processing_service.delete_file(file_id)
+            # Use storage manager to delete file
+            success = await self.file_processing_service.storage_manager.remove_file(file_id)
             if success:
                 logger.info(f"FileService: Successfully deleted file {file_id}")
             return success
@@ -93,14 +94,18 @@ class FileService:
     async def list_files(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         """List files with pagination."""
         try:
-            files = await self.file_processing_service.list_files(limit=limit, offset=offset)
+            # Use storage manager to get basic file stats instead
+            stats = await self.file_processing_service.storage_manager.get_storage_stats()
+            total_files = stats.get("total_files", 0)
+            
+            # Return basic structure - this is a simplified implementation
             return {
-                "files": files,
+                "files": [],  # Would need a proper file registry to implement this
                 "pagination": {
                     "limit": limit,
                     "offset": offset,
-                    "total_count": len(files),  # Simplified for now
-                },
+                    "total_count": total_files
+                }
             }
         except Exception as e:
             logger.error(f"Failed to list files: {e}")
@@ -157,9 +162,10 @@ class FileService:
                     status=ProcessingStatus.NOT_FOUND,
                     progress_percentage=0.0,
                     current_step="File not found",
+                    estimated_time_remaining=None,
                     error_message="File not found",
                 )
-
+            
             # Get status from file info or default to uploaded
             status_str = file_info.get("status", "uploaded")
             try:
@@ -172,6 +178,7 @@ class FileService:
                 status=status,
                 progress_percentage=file_info.get("progress_percentage", 0.0),
                 current_step=file_info.get("current_step", "File uploaded"),
+                estimated_time_remaining=None,
                 error_message=file_info.get("error_message"),
             )
         except Exception as e:
@@ -181,5 +188,6 @@ class FileService:
                 status=ProcessingStatus.FAILED,
                 progress_percentage=0.0,
                 current_step="Error occurred",
+                estimated_time_remaining=None,
                 error_message=f"Failed to get status: {str(e)}",
             )

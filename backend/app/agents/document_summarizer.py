@@ -5,7 +5,7 @@ Document Summarizer Agent - Provides clear summaries of legal documents.
 import logging
 from typing import Any
 
-from app.core.graph_state import DocumentAnalysisState
+from app.core.graph_state import DocumentAnalysisState, DocumentType
 
 from .base_agent import BaseAnalysisAgent
 
@@ -58,15 +58,15 @@ class DocumentSummarizerAgent(BaseAnalysisAgent):
         # Extract document type for classification (for compatibility)
         doc_summary = results.get("document_summary", "").lower()
         if any(word in doc_summary for word in ["contract", "agreement", "terms"]):
-            state["document_type"] = "contract"
+            state["document_type"] = DocumentType.CONTRACT
         elif any(word in doc_summary for word in ["lease", "rental"]):
-            state["document_type"] = "lease"
+            state["document_type"] = DocumentType.LEASE
         elif any(word in doc_summary for word in ["employment", "job", "work"]):
-            state["document_type"] = "employment"
+            state["document_type"] = DocumentType.EMPLOYMENT
         elif any(word in doc_summary for word in ["nda", "confidential", "non-disclosure"]):
-            state["document_type"] = "nda"
+            state["document_type"] = DocumentType.NDA
         else:
-            state["document_type"] = "legal_document"
+            state["document_type"] = DocumentType.UNKNOWN
 
         state["confidence_score"] = 0.85  # AI analysis confidence
 

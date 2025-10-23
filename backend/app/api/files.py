@@ -148,7 +148,7 @@ async def get_file_details(file_id: str, file_service: FileServiceDep) -> FileDe
         file_details = await file_service.get_file_details(file_id)
         if not file_details:
             raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
-        return file_details
+        return FileDetailsResponse(**file_details)
     except HTTPException:
         raise
     except Exception as e:
@@ -228,7 +228,7 @@ async def get_supported_formats(file_service: FileProcessingServiceDep) -> dict[
 async def get_storage_stats(file_service: FileServiceDep) -> StorageStatsResponse:
     """Get storage statistics."""
     try:
-        stats_data = await file_service.get_storage_stats()
+        stats_data = await file_service.file_processing_service.storage_manager.get_storage_stats()
         return StorageStatsResponse(
             storage_stats=stats_data["storage_stats"],
             cleanup_enabled=stats_data["cleanup_enabled"],

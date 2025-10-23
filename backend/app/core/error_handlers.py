@@ -4,7 +4,7 @@ Common error handling utilities for the application.
 
 import logging
 import traceback
-from typing import Any
+from typing import Any, Literal, Self
 
 from fastapi import HTTPException
 
@@ -176,10 +176,10 @@ class error_context:
         self.context = context
         self.file_id = file_id
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> Literal[False]:
         if exc_type and exc_type != HTTPException:
             # Log the error but don't suppress it
             logger.error(f"Error in {self.context}: {exc_val}")

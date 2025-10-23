@@ -34,7 +34,7 @@ class FileProcessingService:
         upload_dir: str = "./uploads",
         max_file_size: int = 50 * 1024 * 1024,
         settings: Settings | None = None,
-    ):
+    ) -> None:
         """
         Initialize the file processing service.
 
@@ -96,6 +96,11 @@ class FileProcessingService:
             logger.info(f"File type determined: {file_type}")
 
             # Additional filename extension check - be more flexible
+            if file.filename is None:
+                error_msg = "Filename is required for validation"
+                logger.warning(f"File validation failed - {error_msg}")
+                return False, error_msg, None
+                
             file_ext = Path(file.filename).suffix.lower()
             allowed_extensions = [".pdf", ".docx", ".txt", ".doc", ".md"]
 
@@ -264,9 +269,6 @@ class FileProcessingService:
             logger.error(f"TXT text extraction failed for file: {file_path}")
             logger.error(f"Error details: {str(e)}")
             raise
-            raise ValueError("No text content found in TXT file")
-
-        return text.strip()
 
     async def cleanup_file(self, file_path: str) -> None:
         """Remove uploaded file from disk."""
@@ -293,6 +295,12 @@ class FileProcessingService:
             raise HTTPException(status_code=400, detail=error_message)
 
         # Create file record
+        if file.filename is None:
+            raise HTTPException(status_code=400, detail="Filename is required")
+        
+        if file_type is None:
+            raise HTTPException(status_code=400, detail="Could not determine file type")
+            
         uploaded_file = DocumentFile(
             filename=file.filename,
             file_type=file_type,
@@ -305,6 +313,9 @@ class FileProcessingService:
             file_content = await file.read()
 
             # Store file temporarily
+            if file.filename is None:
+                raise HTTPException(status_code=400, detail="Filename is required")
+                
             file_path = await self.storage_manager.store_temp_file(
                 file_content, file.filename, uploaded_file.file_id
             )

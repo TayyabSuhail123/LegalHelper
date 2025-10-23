@@ -138,7 +138,7 @@ class DocumentAnalysisService:
             Formatted response
         """
         # Basic response structure
-        response = {
+        response: dict[str, Any] = {
             "file_id": state["file_id"],
             "filename": state["filename"],
             "status": "completed" if state.get("progress_percentage", 0) >= 100 else "processing",
@@ -205,12 +205,14 @@ class DocumentAnalysisService:
         if state.get("rights_obligations"):
             response["rights_obligations"] = state["rights_obligations"]
             # Also map to legacy fields for backward compatibility
-            if state["rights_obligations"].get("your_rights"):
-                response["your_rights"] = state["rights_obligations"]["your_rights"]
-            if state["rights_obligations"].get("other_party_obligations"):
-                response["their_obligations"] = state["rights_obligations"][
-                    "other_party_obligations"
-                ]
+            rights_obligations = state["rights_obligations"]
+            if rights_obligations and isinstance(rights_obligations, dict):
+                if rights_obligations.get("your_rights"):
+                    response["your_rights"] = rights_obligations["your_rights"]
+                if rights_obligations.get("other_party_obligations"):
+                    response["their_obligations"] = rights_obligations[
+                        "other_party_obligations"
+                    ]
         if state.get("compliance_issues"):
             response["compliance_issues"] = state["compliance_issues"]
         if state.get("legal_advice"):
@@ -232,11 +234,12 @@ class DocumentAnalysisService:
 
         # Add document classification if available (legacy format)
         if state.get("document_type"):
+            document_type = state["document_type"]
             response["document_classification"] = {
                 "document_type": (
-                    state["document_type"].value
-                    if hasattr(state["document_type"], "value")
-                    else str(state["document_type"])
+                    document_type.value
+                    if document_type and hasattr(document_type, "value")
+                    else str(document_type) if document_type else ""
                 ),
                 "confidence_score": state.get("confidence_score", 0.0),
             }
@@ -250,35 +253,38 @@ class DocumentAnalysisService:
 
         # Add legacy risk assessment if available
         if state.get("risks"):
-            response["risk_assessment"] = {
-                "overall_risk_score": state.get("overall_risk_score", 0.0),
-                "overall_risk_level": (
-                    state.get("overall_risk_level").value
-                    if state.get("overall_risk_level")
-                    and hasattr(state["overall_risk_level"], "value")
-                    else state.get("overall_risk_level")
-                ),
-                "risks": [
-                    {
-                        "category": (
-                            risk["category"].value
-                            if hasattr(risk["category"], "value")
-                            else str(risk["category"])
-                        ),
-                        "level": (
-                            risk["level"].value
-                            if hasattr(risk["level"], "value")
-                            else str(risk["level"])
-                        ),
-                        "title": risk["title"],
-                        "description": risk["description"],
-                        "recommendation": risk["recommendation"],
-                        "confidence": risk["confidence"],
-                    }
-                    for risk in state["risks"]
-                ],
-                "status": state.get("risk_assessment_status", ProcessingStatus.PENDING).value,
-            }
+            risks_data = state["risks"]
+            if isinstance(risks_data, list):
+                response["risk_assessment"] = {
+                    "overall_risk_score": state.get("overall_risk_score", 0.0),
+                    "overall_risk_level": (
+                        overall_risk_level.value
+                        if (overall_risk_level := state.get("overall_risk_level"))
+                        and hasattr(overall_risk_level, "value")
+                        else str(overall_risk_level) if overall_risk_level else ""
+                    ),
+                    "risks": [
+                        {
+                            "category": (
+                                risk["category"].value
+                                if isinstance(risk, dict) and hasattr(risk.get("category"), "value")
+                                else str(risk.get("category", "")) if isinstance(risk, dict) else ""
+                            ),
+                            "level": (
+                                risk["level"].value
+                                if isinstance(risk, dict) and hasattr(risk.get("level"), "value")
+                                else str(risk.get("level", "")) if isinstance(risk, dict) else ""
+                            ),
+                            "title": risk.get("title", "") if isinstance(risk, dict) else "",
+                            "description": risk.get("description", "") if isinstance(risk, dict) else "",
+                            "recommendation": risk.get("recommendation", "") if isinstance(risk, dict) else "",
+                            "confidence": risk.get("confidence", 0.0) if isinstance(risk, dict) else 0.0,
+                        }
+                        for risk in risks_data
+                        if isinstance(risk, dict)
+                    ],
+                    "status": state.get("risk_assessment_status", ProcessingStatus.PENDING).value,
+                }
 
         # Add summary if available
         if state.get("summary"):
