@@ -2,12 +2,13 @@
 LangGraph state definitions for document analysis workflow.
 """
 
-from typing import TypedDict, Optional, Dict, Any, List
 from enum import Enum
+from typing import Any, TypedDict
 
 
 class DocumentType(str, Enum):
     """Types of legal documents we can analyze."""
+
     CONTRACT = "contract"
     AGREEMENT = "agreement"
     TERMS_OF_SERVICE = "terms_of_service"
@@ -20,6 +21,7 @@ class DocumentType(str, Enum):
 
 class RiskCategory(str, Enum):
     """Categories of legal risks."""
+
     FINANCIAL = "financial"
     LEGAL = "legal"
     OPERATIONAL = "operational"
@@ -30,6 +32,7 @@ class RiskCategory(str, Enum):
 
 class RiskLevel(str, Enum):
     """Risk severity levels."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -38,6 +41,7 @@ class RiskLevel(str, Enum):
 
 class ProcessingStatus(str, Enum):
     """Processing status for each step."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -46,6 +50,7 @@ class ProcessingStatus(str, Enum):
 
 class Risk(TypedDict):
     """Individual risk item."""
+
     category: RiskCategory
     level: RiskLevel
     title: str
@@ -59,66 +64,67 @@ class DocumentAnalysisState(TypedDict):
     State object that flows through the LangGraph workflow.
     Each node can read from and write to this state.
     """
+
     # Input data
     file_id: str
     file_content: bytes
     filename: str
     file_type: str
-    
+
     # Processing status tracking
     current_step: str
     progress_percentage: float
-    
+
     # Text extraction results
-    extracted_text: Optional[str]
+    extracted_text: str | None
     text_extraction_status: ProcessingStatus
-    
+
     # Multi-Agent Analysis Results
     # Document Summarizer Agent
-    document_summary: Optional[str]
-    document_purpose: Optional[str]
-    key_parties: Optional[List[str]]
-    important_dates: Optional[List[str]]
-    
+    document_summary: str | None
+    document_purpose: str | None
+    key_parties: list[str] | None
+    important_dates: list[str] | None
+
     # Risk Assessment Agent
-    legal_risks: Optional[List[Dict[str, Any]]]
-    potential_liabilities: Optional[List[str]]
+    legal_risks: list[dict[str, Any]] | None
+    potential_liabilities: list[str] | None
     overall_risk_score: float  # 0.0 to 10.0
-    overall_risk_level: Optional[RiskLevel]
-    
+    overall_risk_level: RiskLevel | None
+
     # Fraud Detection Agent
-    suspicious_clauses: Optional[List[Dict[str, Any]]]
-    hidden_fees: Optional[List[str]]
-    fraud_indicators: Optional[List[str]]
+    suspicious_clauses: list[dict[str, Any]] | None
+    hidden_fees: list[str] | None
+    fraud_indicators: list[str] | None
     fraud_risk_score: float  # 0.0 to 10.0
-    
+
     # Legal Advisor Agent
-    legal_implications: Optional[List[str]]
-    your_rights: Optional[List[str]]
-    their_obligations: Optional[List[str]]
-    potential_consequences: Optional[List[str]]
-    
+    legal_implications: list[str] | None
+    your_rights: list[str] | None
+    their_obligations: list[str] | None
+    potential_consequences: list[str] | None
+
     # Action Planner Agent
-    immediate_actions: Optional[List[str]]
-    before_signing: Optional[List[str]]
-    long_term_considerations: Optional[List[str]]
-    recommended_timeline: Optional[str]
-    
+    immediate_actions: list[str] | None
+    before_signing: list[str] | None
+    long_term_considerations: list[str] | None
+    recommended_timeline: str | None
+
     # Legacy fields (for backward compatibility)
-    document_type: Optional[DocumentType]
+    document_type: DocumentType | None
     confidence_score: float
-    legal_analysis: Optional[Dict[str, Any]]
+    legal_analysis: dict[str, Any] | None
     analysis_status: ProcessingStatus
-    risks: List[Risk]
+    risks: list[Risk]
     risk_assessment_status: ProcessingStatus
-    executive_summary: Optional[str]
-    key_findings: List[str]
-    
+    executive_summary: str | None
+    key_findings: list[str]
+
     # Error handling
-    error_message: Optional[str]
-    failed_step: Optional[str]
-    
+    error_message: str | None
+    failed_step: str | None
+
     # Metadata
-    processing_time: Optional[float]
+    processing_time: float | None
     created_at: str
-    completed_at: Optional[str]
+    completed_at: str | None

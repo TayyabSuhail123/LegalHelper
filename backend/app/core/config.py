@@ -1,7 +1,6 @@
 """Core configuration for ContractCopilot backend."""
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -33,14 +32,14 @@ class Settings(BaseSettings):
     auto_cleanup_after_analysis: bool = False  # Clean up files after analysis completes
 
     # OpenAI settings
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     openai_model: str = "gpt-3.5-turbo"  # Using gpt-3.5-turbo for better rate limits
     openai_max_tokens: int = 1000  # Reduced to fit within rate limits
     openai_temperature: float = 0.1
 
     # Langfuse settings (for future use)
-    langfuse_public_key: Optional[str] = None
-    langfuse_secret_key: Optional[str] = None
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
 
 

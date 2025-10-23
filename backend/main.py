@@ -2,19 +2,20 @@
 
 import logging
 import traceback
-from fastapi import FastAPI, Request, HTTPException
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 
-from app.core import settings
 from app.api import health_router
 from app.api.files import router as files_router
+from app.core import settings
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -46,14 +47,14 @@ def create_app() -> FastAPI:
         logger.error(f"Request URL: {request.url}")
         logger.error(f"Request method: {request.method}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        
+
         return JSONResponse(
             status_code=500,
             content={
                 "detail": "Internal server error",
                 "error_type": type(exc).__name__,
-                "error_message": str(exc) if settings.debug else "Internal server error"
-            }
+                "error_message": str(exc) if settings.debug else "Internal server error",
+            },
         )
 
     @app.exception_handler(HTTPException)
@@ -62,11 +63,8 @@ def create_app() -> FastAPI:
         logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
         logger.warning(f"Request URL: {request.url}")
         logger.warning(f"Request method: {request.method}")
-        
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail}
-        )
+
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -74,11 +72,8 @@ def create_app() -> FastAPI:
         logger.warning(f"Validation error: {exc.errors()}")
         logger.warning(f"Request URL: {request.url}")
         logger.warning(f"Request method: {request.method}")
-        
-        return JSONResponse(
-            status_code=422,
-            content={"detail": exc.errors()}
-        )
+
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
     # Add CORS middleware
     app.add_middleware(

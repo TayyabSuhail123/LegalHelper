@@ -1,8 +1,9 @@
 """Pydantic models for API responses."""
 
-from pydantic import BaseModel
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class HealthResponse(BaseModel):
@@ -28,5 +29,5 @@ class SuccessResponse(BaseModel):
 
     success: bool
     message: str
-    data: Dict[str, Any] = {}
+    data: dict[str, Any] = {}
     timestamp: datetime

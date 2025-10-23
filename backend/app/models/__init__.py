@@ -1,8 +1,8 @@
 """Models module initialization."""
 
 from .file_processing import (
-    DocumentFile,
     DocumentAnalysis,
+    DocumentFile,
     FileType,
     ProcessingStatus,
     RiskLevel,
@@ -10,7 +10,7 @@ from .file_processing import (
 
 __all__ = [
     "DocumentFile",
-    "DocumentAnalysis", 
+    "DocumentAnalysis",
     "FileType",
     "ProcessingStatus",
     "RiskLevel",
